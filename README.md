@@ -1,5 +1,6 @@
+## Audio spectrum analyzer
 <img width="1013" height="729" alt="image" src="https://github.com/user-attachments/assets/7aed0384-058c-43fa-85e8-4d534d7af0b3" />
-# Audio spectrum analyzer
+
 
 The main objective of the project is to listen to the surrounding audio and display the spectrum of that.
 
@@ -9,6 +10,12 @@ The main objective of the project is to listen to the surrounding audio and disp
 * On-device control with push buttons
 * App control
 * The app also works as the display
+
+## Hardware components
+* Screen: SH1106
+* Microfone: LM393
+* Microcontroller: ESP32
+
 
 
 # import scipy.fft info:https://docs.scipy.org/doc/scipy/tutorial/fft.html#fast-fourier-transforms
