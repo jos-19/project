@@ -16,3 +16,4 @@ The main objective of the project is to listen to the surrounding audio and disp
 # Applications https://www.tecnare.com/es/article/analisis-de-fourier-aplicado-al-audio-dominio-tiempo-frecuencia/
 # Info https://es.python-3.com/?p=266
 # FIR https://www.tecnare.com/es/article/la-importancia-de-los-filtros-fir/
+# https://pysdr.org/es/content-es/filters.html
