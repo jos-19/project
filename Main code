@@ -1,24 +1,24 @@
-from machine import ADC, Pin
+from machine import Pin
 import time
 
-# Initialize ADC channel
-adc1 = ADC(Pin(36))    # Pin 36 is ADC1_CHANNEL_0 (GPIO36)
+# --- Setup ---
+# Connect the "DO" (Digital Out) pin from the sensor to GPIO 36
+# (You can use any GPIO pin that is not ADC-only)
+digital_pin = Pin(36, Pin.IN)
 
-# Set ADC attenuation for the 0-3.3V range
-adc1.atten(ADC.ATTN_11DB)
-# Set the bit width (12-bit is 0-4095)
-adc1.width(ADC.WIDTH_12BIT)
+print("Starting digital pin test. Press Ctrl+C to stop.")
+print("Adjust the potentiometer and make noise.")
 
-print("Starting plotter. Close this window and open the Serial Plotter.")
-time.sleep(1)
-
+# --- Loop ---
 try:
     while True:
-        val1 = adc1.read()
-        print(val1)
-        # We run this as fast as possible.
-        # The print speed will limit our sample rate,
-        # but it's fast enough to see the signal.
+        # Read the digital value (will be 0 or 1)
+        value = digital_pin.value()
         
+        print(f"Digital Value: {value}")
+        
+        # Wait a short time so the console isn't flooded
+        time.sleep(0.1)
+
 except KeyboardInterrupt:
     print("Program stopped.")
