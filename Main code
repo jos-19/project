@@ -1,4 +1,24 @@
+from machine import ADC, Pin
+import time
 
-from machine import Pin, ADC
-from sh1106 import SH1106_I2C
+# Initialize ADC channel
+adc1 = ADC(Pin(36))    # Pin 36 is ADC1_CHANNEL_0 (GPIO36)
 
+# Set ADC attenuation for the 0-3.3V range
+adc1.atten(ADC.ATTN_11DB)
+# Set the bit width (12-bit is 0-4095)
+adc1.width(ADC.WIDTH_12BIT)
+
+print("Starting plotter. Close this window and open the Serial Plotter.")
+time.sleep(1)
+
+try:
+    while True:
+        val1 = adc1.read()
+        print(val1)
+        # We run this as fast as possible.
+        # The print speed will limit our sample rate,
+        # but it's fast enough to see the signal.
+        
+except KeyboardInterrupt:
+    print("Program stopped.")
