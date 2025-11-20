@@ -1,7 +1,7 @@
 import machine
 import time
 import math
-import ssd1306
+from sh1106 import SH1106_I2C
 
 # -----------------------------------------------------------------------------
 # CRITICAL: This code requires 'ulab' firmware.
@@ -14,7 +14,7 @@ except ImportError:
     raise
 
 # --- Hardware Configuration ---
-# I2C Config for OLED (SSD1306)
+# I2C Config for OLED (SH1106)
 I2C_SCL_PIN = 22
 I2C_SDA_PIN = 21
 OLED_WIDTH  = 128
@@ -37,17 +37,23 @@ class SpectrumAnalyzer:
         # This reduces spectral leakage (noise) at edges of the sample
         self.window = np.array([0.5 * (1 - math.cos(2 * math.pi * i / (SAMPLE_LENGTH - 1))) 
                                 for i in range(SAMPLE_LENGTH)])
-        
-        # Setup logging (Optional placeholder)
-        self.logging_enabled = False
-        self.log_file = None
 
     def setup_display(self):
-        print("Initializing OLED...")
-        i2c = machine.I2C(0, scl=machine.Pin(I2C_SCL_PIN), sda=machine.Pin(I2C_SDA_PIN))
-        self.oled = ssd1306.SSD1306_I2C(OLED_WIDTH, OLED_HEIGHT, i2c)
+        print("Initializing SH1106 OLED...")
+        # Init I2C using pins GP22 & GP21 (default I2C0 pins)
+        i2c = machine.I2C(0, scl=machine.Pin(I2C_SCL_PIN), sda=machine.Pin(I2C_SDA_PIN), freq=400000)
+        
+        # Initialize SH1106 based on your provided snippet
+        # Note: Some SH1106 libraries require (width, height, i2c)
+        # But based on your snippet: display = SH1106_I2C(i2c)
+        try:
+            self.oled = SH1106_I2C(i2c)
+        except TypeError:
+            # Fallback if the library demands width/height arguments
+            self.oled = SH1106_I2C(OLED_WIDTH, OLED_HEIGHT, i2c)
+            
         self.oled.fill(0)
-        self.oled.text("Initializing...", 10, 30)
+        self.oled.text("Listening...", 10, 30)
         self.oled.show()
 
     def setup_mic(self):
@@ -68,8 +74,6 @@ class SpectrumAnalyzer:
         adc_read = self.adc.read
         for i in range(SAMPLE_LENGTH):
             raw_samples[i] = adc_read()
-            # Small delay might be needed if sampling is TOO fast, 
-            # but usually Python loop overhead limits us to ~10-20kHz anyway.
             
         return np.array(raw_samples)
 
@@ -112,6 +116,7 @@ class SpectrumAnalyzer:
         
         # Scale factor to fit FFT magnitude to screen height (64 pixels)
         # You may need to tune this DIVISOR based on your Mic volume
+        # Lower = More sensitive
         DIVISOR = 100 
         
         for x in range(len(magnitude)):
@@ -135,9 +140,6 @@ class SpectrumAnalyzer:
             try:
                 # 1. Acquire Data
                 raw_data = self.read_audio()
-                
-                # Optional: Log to SD logic would go here 
-                # (Warning: Writing to SD causes massive lag in visualizer)
                 
                 # 2. Math
                 mags = self.process_fft(raw_data)
