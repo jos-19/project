@@ -8,23 +8,20 @@ I2C_SCL_PIN = 22
 I2C_SDA_PIN = 21
 OLED_WIDTH  = 128
 OLED_HEIGHT = 64
-MIC_PIN = 36
+MIC_PIN = 34 
 
 # --- TUNING KNOBS (Adjust these!) ---
 
 # 1. CUT THE BASS NOISE
 # The first few "bins" are usually just power supply hum/DC offset.
-# Increase this (try 2, 3, or 4) if the left side is always stuck high.
 IGNORE_LOW_BINS = 3
 
 # 2. NOISE GATE (Squelch)
 # Any bar smaller than this value will be treated as 0.
-# Increase this (e.g., 500, 800) if you see "static" when the room is quiet.
 NOISE_GATE = 400
 
 # 3. SOFTWARE GAIN
 # Multiplies the height of the bars.
-# Increase this (e.g., 2.0, 5.0) if the bars are too small.
 GAIN = 3.0
 
 # --- FFT Configuration ---
@@ -35,26 +32,28 @@ class SpectrumAnalyzer:
         self.setup_display()
         self.setup_mic()
         
-        # We run the calibration just to print info, but we won't use it for complex scaling
-        # to keep the visual simple and fast.
+        # --- AUTO-CALIBRATION ---
+        # We measure speed to label the x-axis correctly
         self.real_sampling_rate = self.measure_sampling_rate()
+        self.hz_per_bin = self.real_sampling_rate / SAMPLE_LENGTH
+        self.max_freq = self.real_sampling_rate / 2
+        
         print(f"Sampling Rate: {self.real_sampling_rate} Hz")
+        print(f"Max Freq: {self.max_freq} Hz")
+        print(f"Resolution: {self.hz_per_bin:.1f} Hz/bin")
 
     def setup_display(self):
         print("Initializing SH1106 OLED...")
         i2c = machine.I2C(0, scl=machine.Pin(I2C_SCL_PIN), sda=machine.Pin(I2C_SDA_PIN), freq=400000)
-        
         try:
             self.oled = SH1106_I2C(i2c)
         except TypeError:
             self.oled = SH1106_I2C(OLED_WIDTH, OLED_HEIGHT, i2c)
-            
         self.oled.fill(0)
         self.oled.text("Ready...", 10, 30)
         self.oled.show()
 
     def setup_mic(self):
-        print("Initializing Mic...")
         self.adc = machine.ADC(machine.Pin(MIC_PIN))
         self.adc.width(machine.ADC.WIDTH_12BIT) 
         self.adc.atten(machine.ADC.ATTN_11DB)   
@@ -75,41 +74,60 @@ class SpectrumAnalyzer:
         hz = 1000000 / (diff / SAMPLE_LENGTH)
         return int(hz)
 
+    def format_freq(self, hz):
+        """Helper to make numbers look nice (e.g. 1200 -> 1.2k)"""
+        if hz >= 1000:
+            return f"{hz/1000:.1f}k"
+        return str(int(hz))
+
     def draw_spectrum(self, magnitudes):
         self.oled.fill(0)
         
-        # Base divisor to convert magnitude to pixels
-        # We apply our custom GAIN here.
         BASE_DIVISOR = 150
-        
-        # We skip the first 'IGNORE_LOW_BINS'
-        # We only draw up to 64 bars (half of SAMPLE_LENGTH)
-        # But screen is 128px wide, so each bar is 2px wide.
+        BAR_BOTTOM = 53  # Leave 11 pixels at bottom for text
         
         bar_count = 0
         
+        # 1. Draw Bars
         for i in range(IGNORE_LOW_BINS, len(magnitudes)):
+            # Stop if we run off screen
             if bar_count * 2 >= OLED_WIDTH: break
             
             mag = magnitudes[i]
             
             # Apply Noise Gate
-            if mag < NOISE_GATE:
-                mag = 0
+            if mag < NOISE_GATE: mag = 0
             
             # Calculate Height
-            # (mag / BASE_DIVISOR) * GAIN
             h = int((mag / BASE_DIVISOR) * GAIN)
-            
-            # Cap height at 64
-            if h > 64: h = 64
+            if h > BAR_BOTTOM: h = BAR_BOTTOM
             
             # Draw Bar
-            # x = bar_count * 2 (spreads them out)
             if h > 0:
-                self.oled.fill_rect(bar_count * 2, 64 - h, 1, h, 1)
+                self.oled.fill_rect(bar_count * 2, BAR_BOTTOM - h, 1, h, 1)
                 
             bar_count += 1
+            
+        # 2. Draw Scale (Axis)
+        self.oled.hline(0, BAR_BOTTOM + 1, 128, 1)
+        
+        # Start Freq (Left)
+        start_freq = IGNORE_LOW_BINS * self.hz_per_bin
+        self.oled.text(self.format_freq(start_freq), 0, 56)
+        
+        # Mid Freq (Center)
+        # Rough approximation of the middle of the screen
+        mid_bin = IGNORE_LOW_BINS + (bar_count // 2)
+        mid_freq = mid_bin * self.hz_per_bin
+        mid_str = self.format_freq(mid_freq)
+        self.oled.text(mid_str, 55, 56)
+
+        # End Freq (Right)
+        end_bin = IGNORE_LOW_BINS + bar_count
+        end_freq = end_bin * self.hz_per_bin
+        end_str = self.format_freq(end_freq)
+        # Right align
+        self.oled.text(end_str, 128 - (len(end_str)*8), 56)
             
         self.oled.show()
 
