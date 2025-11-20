@@ -1,6 +1,6 @@
 ## Audio spectrum analyzer
-<img width="1013" height="729" alt="image" src="https://github.com/user-attachments/assets/7aed0384-058c-43fa-85e8-4d534d7af0b3" />
 
+<img width="1066" height="755" alt="Screenshot 2025-11-20 151451" src="https://github.com/user-attachments/assets/37a1bcab-d63e-458c-b9a5-55f53e84ecd9" />
 
 The main objective of the project is to listen to the surrounding audio and display the spectrum of that.
 
