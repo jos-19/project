@@ -1,55 +1,32 @@
 import machine
 import time
-import math
+import fft  # Import our new pure python library
 from sh1106 import SH1106_I2C
 
-# -----------------------------------------------------------------------------
-# CRITICAL: This code requires 'ulab' firmware.
-# ulab is a numpy-like library for MicroPython that calculates FFTs very fast.
-# -----------------------------------------------------------------------------
-try:
-    from ulab import numpy as np
-except ImportError:
-    print("Error: ulab library not found. Please flash MicroPython firmware with ulab.")
-    raise
-
 # --- Hardware Configuration ---
-# I2C Config for OLED (SH1106)
 I2C_SCL_PIN = 22
 I2C_SDA_PIN = 21
 OLED_WIDTH  = 128
 OLED_HEIGHT = 64
-
-# ADC Config for MAX4466
-# ADC1_0 is usually GPIO 36 (VP), ADC1_6 is GPIO 34. Check your pinout.
 MIC_PIN = 34 
 
 # --- FFT Configuration ---
-SAMPLE_LENGTH = 256 # Power of 2. 256 samples = 128 freq bins (matches OLED width)
-SAMPLING_RATE = 10000 # Hz (Approximate target)
+# Reduced to 128 for speed since we are using Pure Python now.
+# 128 samples = 64 frequency bars. We will draw each bar 2 pixels wide.
+SAMPLE_LENGTH = 128 
 
 class SpectrumAnalyzer:
     def __init__(self):
         self.setup_display()
         self.setup_mic()
-        
-        # Pre-calculate a Hanning window to smooth the audio
-        # This reduces spectral leakage (noise) at edges of the sample
-        self.window = np.array([0.5 * (1 - math.cos(2 * math.pi * i / (SAMPLE_LENGTH - 1))) 
-                                for i in range(SAMPLE_LENGTH)])
 
     def setup_display(self):
         print("Initializing SH1106 OLED...")
-        # Init I2C using pins GP22 & GP21 (default I2C0 pins)
         i2c = machine.I2C(0, scl=machine.Pin(I2C_SCL_PIN), sda=machine.Pin(I2C_SDA_PIN), freq=400000)
         
-        # Initialize SH1106 based on your provided snippet
-        # Note: Some SH1106 libraries require (width, height, i2c)
-        # But based on your snippet: display = SH1106_I2C(i2c)
         try:
             self.oled = SH1106_I2C(i2c)
         except TypeError:
-            # Fallback if the library demands width/height arguments
             self.oled = SH1106_I2C(OLED_WIDTH, OLED_HEIGHT, i2c)
             
         self.oled.fill(0)
@@ -63,86 +40,47 @@ class SpectrumAnalyzer:
         self.adc.atten(machine.ADC.ATTN_11DB)   # Full 3.3V range
 
     def read_audio(self):
-        """
-        Reads SAMPLE_LENGTH samples from ADC as fast as possible.
-        """
-        # We use a standard python list for collection then convert to ndarray
-        # This is slightly slower than DMA but easiest in pure MicroPython
-        raw_samples = [0] * SAMPLE_LENGTH
-        
-        # Critical timing section
+        raw_samples = []
         adc_read = self.adc.read
-        for i in range(SAMPLE_LENGTH):
-            raw_samples[i] = adc_read()
-            
-        return np.array(raw_samples)
+        # Read samples as fast as possible
+        for _ in range(SAMPLE_LENGTH):
+            raw_samples.append(adc_read())
+        return raw_samples
 
-    def process_fft(self, raw_data):
-        """
-        1. Remove DC Offset
-        2. Apply Window
-        3. Compute FFT
-        4. Compute Magnitude
-        """
-        # 1. Remove DC bias (center the signal around 0)
-        mean_val = np.mean(raw_data)
-        centered = raw_data - mean_val
-        
-        # 2. Apply Hanning Window
-        windowed = centered * self.window
-        
-        # 3. Perform FFT (Real input -> Complex output)
-        # Note: ulab fft returns real and imaginary parts
-        fx, fy = np.fft.fft(windowed)
-        
-        # 4. Calculate Magnitude: sqrt(re^2 + im^2)
-        # We only need the first half (0 to N/2), the rest is a mirror image
-        # We skip index 0 (DC component)
-        
-        # Create a magnitude array for the first 128 bins
-        # (Manual calculation is often safer across ulab versions than np.abs(complex))
-        n_bins = int(SAMPLE_LENGTH / 2)
-        
-        # Slice the arrays to first half
-        fx_half = fx[0:n_bins]
-        fy_half = fy[0:n_bins]
-        
-        magnitude = np.sqrt(fx_half * fx_half + fy_half * fy_half)
-        
-        return magnitude
-
-    def draw_spectrum(self, magnitude):
+    def draw_spectrum(self, magnitudes):
         self.oled.fill(0)
         
-        # Scale factor to fit FFT magnitude to screen height (64 pixels)
-        # You may need to tune this DIVISOR based on your Mic volume
-        # Lower = More sensitive
-        DIVISOR = 100 
+        # Sensitivity divisor. 
+        # Since we have fewer samples, the magnitude might be smaller or larger.
+        # Adjust this number if bars are too big or too small.
+        DIVISOR = 25 
         
-        for x in range(len(magnitude)):
-            if x >= OLED_WIDTH: break # Safety
+        # We have 64 bars (SAMPLE_LENGTH / 2)
+        # Screen is 128 pixels wide.
+        # So each bar is 2 pixels wide.
+        for i, mag in enumerate(magnitudes):
+            if i >= 64: break 
             
-            # Calculate bar height
-            val = int(magnitude[x] / DIVISOR)
+            h = int(mag / DIVISOR)
+            if h > 64: h = 64
             
-            # Cap height at 64
-            if val > 64: val = 64
-            
-            # Draw vertical line from bottom up
-            # x, y, color
-            self.oled.vline(x, 64 - val, val, 1)
+            # Draw a filled rectangle (bar)
+            # x, y, width, height, color
+            x_pos = i * 2
+            self.oled.fill_rect(x_pos, 64 - h, 2, h, 1)
             
         self.oled.show()
 
     def run(self):
-        print("Starting Spectrum Analyzer...")
+        print("Starting Spectrum Analyzer (Pure Python)...")
         while True:
             try:
                 # 1. Acquire Data
                 raw_data = self.read_audio()
                 
-                # 2. Math
-                mags = self.process_fft(raw_data)
+                # 2. Math (Using our new fft.py file)
+                # This returns a list of 64 magnitudes
+                mags = fft.get_magnitude(raw_data)
                 
                 # 3. Display
                 self.draw_spectrum(mags)
@@ -154,7 +92,6 @@ class SpectrumAnalyzer:
                 print("Error:", e)
                 time.sleep(1)
 
-# --- Entry Point ---
 if __name__ == "__main__":
     analyzer = SpectrumAnalyzer()
     analyzer.run()
