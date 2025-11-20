@@ -11,14 +11,21 @@ OLED_HEIGHT = 64
 MIC_PIN = 34 
 
 # --- FFT Configuration ---
-# Reduced to 128 for speed since we are using Pure Python now.
-# 128 samples = 64 frequency bars. We will draw each bar 2 pixels wide.
 SAMPLE_LENGTH = 128 
 
 class SpectrumAnalyzer:
     def __init__(self):
         self.setup_display()
         self.setup_mic()
+        
+        # --- AUTO-CALIBRATION ---
+        # We measure how fast Python can actually read the microphone.
+        # This determines the real "Max Frequency" we can display.
+        self.real_sampling_rate = self.measure_sampling_rate()
+        self.max_freq_hz = self.real_sampling_rate / 2
+        
+        print(f"Measured Sampling Rate: {self.real_sampling_rate} Hz")
+        print(f"Max Detectable Freq: {self.max_freq_hz} Hz")
 
     def setup_display(self):
         print("Initializing SH1106 OLED...")
@@ -30,56 +37,93 @@ class SpectrumAnalyzer:
             self.oled = SH1106_I2C(OLED_WIDTH, OLED_HEIGHT, i2c)
             
         self.oled.fill(0)
-        self.oled.text("Listening...", 10, 30)
+        self.oled.text("Calibrating...", 10, 30)
         self.oled.show()
 
     def setup_mic(self):
         print("Initializing Mic...")
         self.adc = machine.ADC(machine.Pin(MIC_PIN))
-        self.adc.width(machine.ADC.WIDTH_12BIT) # 0-4095
-        self.adc.atten(machine.ADC.ATTN_11DB)   # Full 3.3V range
+        self.adc.width(machine.ADC.WIDTH_12BIT) 
+        self.adc.atten(machine.ADC.ATTN_11DB)   
 
     def read_audio(self):
         raw_samples = []
         adc_read = self.adc.read
-        # Read samples as fast as possible
         for _ in range(SAMPLE_LENGTH):
             raw_samples.append(adc_read())
         return raw_samples
 
+    def measure_sampling_rate(self):
+        """
+        Runs the audio reader 5 times to calculate the average
+        sampling rate in Hz.
+        """
+        # Warmup
+        self.read_audio()
+        
+        total_time_us = 0
+        iterations = 5
+        
+        for _ in range(iterations):
+            start = time.ticks_us()
+            self.read_audio()
+            end = time.ticks_us()
+            total_time_us += time.ticks_diff(end, start)
+            
+        avg_time_per_block = total_time_us / iterations
+        avg_time_per_sample_us = avg_time_per_block / SAMPLE_LENGTH
+        
+        # Frequency = 1,000,000 microseconds / microseconds per sample
+        hz = 1000000 / avg_time_per_sample_us
+        return int(hz)
+
     def draw_spectrum(self, magnitudes):
         self.oled.fill(0)
         
-        # Sensitivity divisor. 
-        # Since we have fewer samples, the magnitude might be smaller or larger.
-        # Adjust this number if bars are too big or too small.
         DIVISOR = 25 
+        BAR_BOTTOM = 54 # Leave 10 pixels at bottom for text
         
-        # We have 64 bars (SAMPLE_LENGTH / 2)
-        # Screen is 128 pixels wide.
-        # So each bar is 2 pixels wide.
+        # 1. Draw the Bars
         for i, mag in enumerate(magnitudes):
             if i >= 64: break 
             
             h = int(mag / DIVISOR)
-            if h > 64: h = 64
+            if h > BAR_BOTTOM: h = BAR_BOTTOM
             
-            # Draw a filled rectangle (bar)
-            # x, y, width, height, color
+            # x_pos, y_pos, width, height, color
+            # Draw from BAR_BOTTOM upwards
             x_pos = i * 2
-            self.oled.fill_rect(x_pos, 64 - h, 2, h, 1)
+            self.oled.fill_rect(x_pos, BAR_BOTTOM - h, 2, h, 1)
+            
+        # 2. Draw the Scale (Axis)
+        # Draw a line separating bars from text
+        self.oled.hline(0, BAR_BOTTOM + 1, 128, 1)
+        
+        # Label 1: Start (0 Hz)
+        self.oled.text("0", 0, 56)
+        
+        # Label 2: Middle
+        mid_freq = int(self.max_freq_hz / 2)
+        mid_text = f"{mid_freq/1000:.1f}k" if mid_freq >= 1000 else str(mid_freq)
+        # Center the text roughly (subtract 15px from center)
+        self.oled.text(mid_text, 50, 56)
+        
+        # Label 3: Max
+        max_freq = int(self.max_freq_hz)
+        max_text = f"{max_freq/1000:.1f}k" if max_freq >= 1000 else str(max_freq)
+        # Right align roughly (subtract text width)
+        self.oled.text(max_text, 95, 56)
             
         self.oled.show()
 
     def run(self):
-        print("Starting Spectrum Analyzer (Pure Python)...")
+        print("Starting Spectrum Analyzer...")
         while True:
             try:
                 # 1. Acquire Data
                 raw_data = self.read_audio()
                 
-                # 2. Math (Using our new fft.py file)
-                # This returns a list of 64 magnitudes
+                # 2. Math
                 mags = fft.get_magnitude(raw_data)
                 
                 # 3. Display
