@@ -1,62 +1,101 @@
 import machine
 import time
+import math
 import fft  # Your pure python library
 from sh1106 import SH1106_I2C
 
 # --- Hardware Configuration ---
 I2C_SCL_PIN = 22
 I2C_SDA_PIN = 21
+BUTTON_PIN  = 14  # Connect Button between GPIO 14 and GND
+MIC_PIN     = 34 
+
 OLED_WIDTH  = 128
 OLED_HEIGHT = 64
-MIC_PIN = 34 
 
-# --- TUNING KNOBS (Adjust these!) ---
+# --- TUNING ---
+IGNORE_LOW_BINS = 3   # Ignore DC/Hum
+NOISE_GATE      = 400 # Squelch static
+GAIN            = 3.0 # Visual gain
 
-# 1. CUT THE BASS NOISE
-# The first few "bins" are usually just power supply hum/DC offset.
-IGNORE_LOW_BINS = 3
-
-# 2. NOISE GATE (Squelch)
-# Any bar smaller than this value will be treated as 0.
-NOISE_GATE = 400
-
-# 3. SOFTWARE GAIN
-# Multiplies the height of the bars.
-GAIN = 3.0
-
-# --- FFT Configuration ---
-SAMPLE_LENGTH = 128 
+# --- FFT CONFIG ---
+SAMPLE_LENGTH = 128
 
 class SpectrumAnalyzer:
     def __init__(self):
         self.setup_display()
         self.setup_mic()
+        self.setup_button()
         
-        # --- AUTO-CALIBRATION ---
-        # We measure speed to label the x-axis correctly
+        # --- Calibration ---
         self.real_sampling_rate = self.measure_sampling_rate()
         self.hz_per_bin = self.real_sampling_rate / SAMPLE_LENGTH
         self.max_freq = self.real_sampling_rate / 2
         
-        print(f"Sampling Rate: {self.real_sampling_rate} Hz")
-        print(f"Max Freq: {self.max_freq} Hz")
-        print(f"Resolution: {self.hz_per_bin:.1f} Hz/bin")
+        print(f"Rate: {self.real_sampling_rate}Hz | Res: {self.hz_per_bin:.1f}Hz")
+
+        # --- Mode State ---
+        self.mode = 0
+        self.mode_names = ["Speech Zoom", "Wide Range", "Analyzer", "dB Meter"]
+        self.last_button_time = 0
+        self.button_flag = False
+        
+        # --- Mode Specific Variables ---
+        self.analysis_start = 0
+        self.analysis_accum = []
+        self.analysis_count = 0
+        self.analysis_done = False
+        
+        self.db_min = 999
+        self.db_max = -999
 
     def setup_display(self):
-        print("Initializing SH1106 OLED...")
         i2c = machine.I2C(0, scl=machine.Pin(I2C_SCL_PIN), sda=machine.Pin(I2C_SDA_PIN), freq=400000)
         try:
             self.oled = SH1106_I2C(i2c)
         except TypeError:
             self.oled = SH1106_I2C(OLED_WIDTH, OLED_HEIGHT, i2c)
         self.oled.fill(0)
-        self.oled.text("Ready...", 10, 30)
+        self.oled.text("Select Mode...", 10, 30)
         self.oled.show()
 
     def setup_mic(self):
         self.adc = machine.ADC(machine.Pin(MIC_PIN))
         self.adc.width(machine.ADC.WIDTH_12BIT) 
         self.adc.atten(machine.ADC.ATTN_11DB)   
+
+    def setup_button(self):
+        # Pin 14, Pull Up. Button connects to GND.
+        self.btn = machine.Pin(BUTTON_PIN, machine.Pin.IN, machine.Pin.PULL_UP)
+        # Interrupt on falling edge (press)
+        self.btn.irq(trigger=machine.Pin.IRQ_FALLING, handler=self.button_isr)
+
+    def button_isr(self, pin):
+        # Basic debounce using time
+        t = time.ticks_ms()
+        if time.ticks_diff(t, self.last_button_time) > 250:
+            self.last_button_time = t
+            self.button_flag = True
+
+    def check_mode_change(self):
+        if self.button_flag:
+            self.button_flag = False
+            self.mode = (self.mode + 1) % 4
+            print(f"Switched to Mode: {self.mode_names[self.mode]}")
+            
+            # Reset mode specific stuff
+            self.analysis_start = 0
+            self.analysis_done = False
+            self.db_min = 999
+            self.db_max = -999
+            
+            # Show splash screen
+            self.oled.fill(0)
+            self.oled.text(self.mode_names[self.mode], 10, 30)
+            self.oled.show()
+            time.sleep(0.5)
+            return True
+        return False
 
     def read_audio(self):
         raw_samples = []
@@ -66,78 +105,213 @@ class SpectrumAnalyzer:
         return raw_samples
 
     def measure_sampling_rate(self):
-        self.read_audio() # Warmup
+        self.read_audio()
         start = time.ticks_us()
         self.read_audio()
         end = time.ticks_us()
         diff = time.ticks_diff(end, start)
-        hz = 1000000 / (diff / SAMPLE_LENGTH)
-        return int(hz)
+        return int(1000000 / (diff / SAMPLE_LENGTH))
 
     def format_freq(self, hz):
-        """Helper to make numbers look nice (e.g. 1200 -> 1.2k)"""
-        if hz >= 1000:
-            return f"{hz/1000:.1f}k"
+        if hz >= 1000: return f"{hz/1000:.1f}k"
         return str(int(hz))
 
-    def draw_spectrum(self, magnitudes):
+    # =========================================
+    # MODE 0 & 1: SPECTRUM VISUALIZER
+    # =========================================
+    def draw_spectrum(self, magnitudes, min_hz, max_hz, title):
         self.oled.fill(0)
         
         BASE_DIVISOR = 150
-        BAR_BOTTOM = 53  # Leave 11 pixels at bottom for text
+        BAR_BOTTOM = 53
         
-        bar_count = 0
+        # 1. Title
+        self.oled.text(title, 0, 0)
         
-        # 1. Draw Bars
-        for i in range(IGNORE_LOW_BINS, len(magnitudes)):
-            # Stop if we run off screen
-            if bar_count * 2 >= OLED_WIDTH: break
+        # 2. Calculate Range Indices
+        start_idx = int(min_hz / self.hz_per_bin)
+        end_idx   = int(max_hz / self.hz_per_bin)
+        
+        # Safety
+        if start_idx < IGNORE_LOW_BINS: start_idx = IGNORE_LOW_BINS
+        if end_idx >= len(magnitudes): end_idx = len(magnitudes)
+        if end_idx <= start_idx: end_idx = start_idx + 1
+        
+        subset = magnitudes[start_idx:end_idx]
+        
+        # 3. Dynamic Width
+        count = len(subset)
+        if count > 0:
+            width = OLED_WIDTH / count
+        else:
+            width = 2
             
-            mag = magnitudes[i]
-            
-            # Apply Noise Gate
+        # 4. Draw Bars
+        for i, mag in enumerate(subset):
             if mag < NOISE_GATE: mag = 0
-            
-            # Calculate Height
             h = int((mag / BASE_DIVISOR) * GAIN)
-            if h > BAR_BOTTOM: h = BAR_BOTTOM
+            if h > (BAR_BOTTOM - 10): h = (BAR_BOTTOM - 10) # Keep below title
             
-            # Draw Bar
+            x = int(i * width)
             if h > 0:
-                self.oled.fill_rect(bar_count * 2, BAR_BOTTOM - h, 1, h, 1)
-                
-            bar_count += 1
-            
-        # 2. Draw Scale (Axis)
-        self.oled.hline(0, BAR_BOTTOM + 1, 128, 1)
-        
-        # Start Freq (Left)
-        start_freq = IGNORE_LOW_BINS * self.hz_per_bin
-        self.oled.text(self.format_freq(start_freq), 0, 56)
-        
-        # Mid Freq (Center)
-        # Rough approximation of the middle of the screen
-        mid_bin = IGNORE_LOW_BINS + (bar_count // 2)
-        mid_freq = mid_bin * self.hz_per_bin
-        mid_str = self.format_freq(mid_freq)
-        self.oled.text(mid_str, 55, 56)
+                w = int(width) - 1
+                if w < 1: w = 1
+                self.oled.fill_rect(x, BAR_BOTTOM - h, w, h, 1)
 
-        # End Freq (Right)
-        end_bin = IGNORE_LOW_BINS + bar_count
-        end_freq = end_bin * self.hz_per_bin
-        end_str = self.format_freq(end_freq)
-        # Right align
-        self.oled.text(end_str, 128 - (len(end_str)*8), 56)
-            
+        # 5. Scale Labels
+        self.oled.hline(0, BAR_BOTTOM + 1, 128, 1)
+        self.oled.text(self.format_freq(min_hz), 0, 56)
+        self.oled.text(self.format_freq(max_hz), 90, 56)
+        
         self.oled.show()
 
+    # =========================================
+    # MODE 2: ANALYZER (5s Accumulation)
+    # =========================================
+    def run_analyzer(self, magnitudes):
+        # Initialize
+        if self.analysis_start == 0:
+            self.analysis_start = time.time()
+            self.analysis_accum = [0] * len(magnitudes)
+            self.analysis_count = 0
+            self.analysis_done = False
+        
+        # If finished, just show result
+        if self.analysis_done:
+            # Recalculate/Redraw is handled in logic below
+            return
+
+        # Check Timer
+        elapsed = time.time() - self.analysis_start
+        
+        if elapsed < 5:
+            # ACCUMULATE DATA
+            for i in range(len(magnitudes)):
+                self.analysis_accum[i] += magnitudes[i]
+            self.analysis_count += 1
+            
+            # Draw Progress
+            self.oled.fill(0)
+            self.oled.text("Measuring...", 10, 10)
+            self.oled.text(f"Time: {5 - int(elapsed)}s", 10, 25)
+            
+            # Draw a progress bar
+            bar_w = int((elapsed / 5.0) * 100)
+            self.oled.rect(14, 40, 100, 10, 1)
+            self.oled.fill_rect(14, 40, bar_w, 10, 1)
+            self.oled.show()
+            
+        else:
+            # FINISHED - CALCULATE STATS
+            self.analysis_done = True
+            
+            # Compute Average
+            avgs = [x / self.analysis_count for x in self.analysis_accum]
+            
+            # Find Max and Min (ignoring low bins)
+            valid_data = avgs[IGNORE_LOW_BINS:]
+            
+            if not valid_data:
+                return
+            
+            max_val = max(valid_data)
+            min_val = min(valid_data)
+            
+            # Get Indices (add offset back)
+            max_idx = valid_data.index(max_val) + IGNORE_LOW_BINS
+            min_idx = valid_data.index(min_val) + IGNORE_LOW_BINS
+            
+            max_hz = max_idx * self.hz_per_bin
+            min_hz = min_idx * self.hz_per_bin
+            
+            # Draw Result
+            self.oled.fill(0)
+            self.oled.text("--- REPORT ---", 10, 0)
+            
+            self.oled.text("High Energy:", 0, 20)
+            self.oled.text(f"-> {int(max_hz)} Hz", 10, 30)
+            
+            self.oled.text("Low Energy:", 0, 45)
+            self.oled.text(f"-> {int(min_hz)} Hz", 10, 55)
+            self.oled.show()
+
+    # =========================================
+    # MODE 3: dB METER
+    # =========================================
+    def run_db_meter(self, raw_data):
+        # 1. Calculate RMS (Root Mean Square)
+        # Center the signal first
+        avg = sum(raw_data) / len(raw_data)
+        centered = [x - avg for x in raw_data]
+        
+        squared_sum = sum(x*x for x in centered)
+        mean_square = squared_sum / len(centered)
+        rms = math.sqrt(mean_square)
+        
+        # 2. Convert to dB (Approximate)
+        # Reference value? Let's assume max possible RMS is around 1500
+        if rms > 0:
+            db = 20 * math.log10(rms)
+        else:
+            db = 0
+            
+        # Normalize/Calibrate visually (approx 0-100 scale)
+        # A quiet room might read 40dB here, loud 80dB.
+        
+        # 3. Update Stats
+        if db > self.db_max: self.db_max = db
+        if db < self.db_min: self.db_min = db
+        
+        # 4. Draw
+        self.oled.fill(0)
+        self.oled.text("dB Meter", 35, 0)
+        
+        # Big Number
+        self.oled.text(f"{db:.1f} dB", 35, 20)
+        
+        # Min/Max Small
+        self.oled.text(f"Min:{self.db_min:.0f}", 0, 55)
+        self.oled.text(f"Max:{self.db_max:.0f}", 80, 55)
+        
+        # Analog Bar
+        # Scale 0-100 to 0-128 width
+        bar_w = int((db / 100) * 128)
+        if bar_w > 128: bar_w = 128
+        self.oled.fill_rect(0, 35, bar_w, 10, 1)
+        
+        self.oled.show()
+
+    # =========================================
+    # MAIN LOOP
+    # =========================================
     def run(self):
-        print("Starting Spectrum Analyzer...")
+        print("Starting Multimode Analyzer...")
         while True:
             try:
+                # Check Button
+                if self.check_mode_change():
+                    continue # Skip this loop if mode changed
+                
+                # Acquire Data
                 raw_data = self.read_audio()
-                mags = fft.get_magnitude(raw_data)
-                self.draw_spectrum(mags)
+                
+                # Mode Logic
+                if self.mode == 0: # Speech
+                    mags = fft.get_magnitude(raw_data)
+                    self.draw_spectrum(mags, 100, 1000, "Speech Mode")
+                    
+                elif self.mode == 1: # Wide
+                    mags = fft.get_magnitude(raw_data)
+                    self.draw_spectrum(mags, 0, self.max_freq, "Wide Mode")
+                    
+                elif self.mode == 2: # Analyzer
+                    mags = fft.get_magnitude(raw_data)
+                    self.run_analyzer(mags)
+                    
+                elif self.mode == 3: # dB Meter
+                    # dB meter uses raw time-domain data, not FFT
+                    self.run_db_meter(raw_data)
+                
             except KeyboardInterrupt:
                 print("Stopping.")
                 break
