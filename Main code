@@ -1,6 +1,6 @@
 import machine
 import time
-import fft  # Import our new pure python library
+import fft  # Your pure python library
 from sh1106 import SH1106_I2C
 
 # --- Hardware Configuration ---
@@ -8,33 +8,37 @@ I2C_SCL_PIN = 22
 I2C_SDA_PIN = 21
 OLED_WIDTH  = 128
 OLED_HEIGHT = 64
-MIC_PIN = 34 
+MIC_PIN = 36
+
+# --- TUNING KNOBS (Adjust these!) ---
+
+# 1. CUT THE BASS NOISE
+# The first few "bins" are usually just power supply hum/DC offset.
+# Increase this (try 2, 3, or 4) if the left side is always stuck high.
+IGNORE_LOW_BINS = 3
+
+# 2. NOISE GATE (Squelch)
+# Any bar smaller than this value will be treated as 0.
+# Increase this (e.g., 500, 800) if you see "static" when the room is quiet.
+NOISE_GATE = 400
+
+# 3. SOFTWARE GAIN
+# Multiplies the height of the bars.
+# Increase this (e.g., 2.0, 5.0) if the bars are too small.
+GAIN = 3.0
 
 # --- FFT Configuration ---
 SAMPLE_LENGTH = 128 
-
-# --- ZOOM SETTINGS ---
-# Change these to zoom in on specific parts of the audio
-# Previous auto-scale was approx 0 to 10000Hz.
-# User Request: 100Hz to 1000Hz (Bass/Low Mids)
-MIN_FREQ_HZ = 100  
-MAX_FREQ_HZ = 1000 
 
 class SpectrumAnalyzer:
     def __init__(self):
         self.setup_display()
         self.setup_mic()
         
-        # --- AUTO-CALIBRATION ---
+        # We run the calibration just to print info, but we won't use it for complex scaling
+        # to keep the visual simple and fast.
         self.real_sampling_rate = self.measure_sampling_rate()
-        self.max_detectable_freq = self.real_sampling_rate / 2
-        
-        # Calculate Frequency per Bin (Hz Resolution)
-        # e.g., if rate is 6000Hz, and samples is 128, resolution is ~46Hz per bin.
-        self.hz_per_bin = self.real_sampling_rate / SAMPLE_LENGTH
-        
         print(f"Sampling Rate: {self.real_sampling_rate} Hz")
-        print(f"Resolution: {self.hz_per_bin:.1f} Hz per bar")
 
     def setup_display(self):
         print("Initializing SH1106 OLED...")
@@ -46,7 +50,7 @@ class SpectrumAnalyzer:
             self.oled = SH1106_I2C(OLED_WIDTH, OLED_HEIGHT, i2c)
             
         self.oled.fill(0)
-        self.oled.text("Calibrating...", 10, 30)
+        self.oled.text("Ready...", 10, 30)
         self.oled.show()
 
     def setup_mic(self):
@@ -63,77 +67,49 @@ class SpectrumAnalyzer:
         return raw_samples
 
     def measure_sampling_rate(self):
-        # Warmup
+        self.read_audio() # Warmup
+        start = time.ticks_us()
         self.read_audio()
-        
-        total_time_us = 0
-        iterations = 5
-        
-        for _ in range(iterations):
-            start = time.ticks_us()
-            self.read_audio()
-            end = time.ticks_us()
-            total_time_us += time.ticks_diff(end, start)
-            
-        avg_time_per_block = total_time_us / iterations
-        avg_time_per_sample_us = avg_time_per_block / SAMPLE_LENGTH
-        hz = 1000000 / avg_time_per_sample_us
+        end = time.ticks_us()
+        diff = time.ticks_diff(end, start)
+        hz = 1000000 / (diff / SAMPLE_LENGTH)
         return int(hz)
 
     def draw_spectrum(self, magnitudes):
         self.oled.fill(0)
         
-        DIVISOR = 25 
-        BAR_BOTTOM = 54 
+        # Base divisor to convert magnitude to pixels
+        # We apply our custom GAIN here.
+        BASE_DIVISOR = 150
         
-        # 1. Filter Data to Zoom Range
-        # Calculate which array indices correspond to our Hz range
-        start_index = int(MIN_FREQ_HZ / self.hz_per_bin)
-        end_index = int(MAX_FREQ_HZ / self.hz_per_bin)
+        # We skip the first 'IGNORE_LOW_BINS'
+        # We only draw up to 64 bars (half of SAMPLE_LENGTH)
+        # But screen is 128px wide, so each bar is 2px wide.
         
-        # Safety Checks
-        if start_index < 0: start_index = 0
-        if end_index >= len(magnitudes): end_index = len(magnitudes) - 1
-        if end_index <= start_index: end_index = start_index + 1
+        bar_count = 0
         
-        # Slice the data to only the bars we want
-        zoom_data = magnitudes[start_index:end_index]
-        num_bars = len(zoom_data)
-        
-        # 2. Calculate Dynamic Bar Width
-        # Stretch the bars to fill the 128px width
-        if num_bars > 0:
-            bar_width = int(OLED_WIDTH / num_bars)
-        else:
-            bar_width = 2
+        for i in range(IGNORE_LOW_BINS, len(magnitudes)):
+            if bar_count * 2 >= OLED_WIDTH: break
             
-        # 3. Draw the Bars
-        for i, mag in enumerate(zoom_data):
-            h = int(mag / DIVISOR)
-            if h > BAR_BOTTOM: h = BAR_BOTTOM
+            mag = magnitudes[i]
             
-            x_pos = i * bar_width
+            # Apply Noise Gate
+            if mag < NOISE_GATE:
+                mag = 0
             
-            # fill_rect(x, y, w, h, c)
-            # We subtract 1 from width to leave a tiny gap between bars for looks
-            w = bar_width - 1 if bar_width > 2 else bar_width
+            # Calculate Height
+            # (mag / BASE_DIVISOR) * GAIN
+            h = int((mag / BASE_DIVISOR) * GAIN)
             
-            self.oled.fill_rect(x_pos, BAR_BOTTOM - h, w, h, 1)
+            # Cap height at 64
+            if h > 64: h = 64
             
-        # 4. Draw Scale & Labels
-        self.oled.hline(0, BAR_BOTTOM + 1, 128, 1)
-        
-        # Draw Left Label
-        self.oled.text(str(MIN_FREQ_HZ), 0, 56)
-        
-        # Draw Right Label (1000 -> 1k)
-        if MAX_FREQ_HZ >= 1000:
-            right_lbl = f"{MAX_FREQ_HZ//1000}k"
-        else:
-            right_lbl = str(MAX_FREQ_HZ)
-            
-        # Align right text roughly
-        self.oled.text(right_lbl, 128 - (len(right_lbl)*8), 56)
+            # Draw Bar
+            # x = bar_count * 2 (spreads them out)
+            if h > 0:
+                self.oled.fill_rect(bar_count * 2, 64 - h, 1, h, 1)
+                
+            bar_count += 1
             
         self.oled.show()
 
