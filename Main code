@@ -37,8 +37,6 @@ class SpectrumAnalyzer:
         # --- Mode State ---
         self.mode = 0
         self.mode_names = ["Speech Zoom", "Wide Range", "Analyzer", "dB Meter"]
-        self.last_button_time = 0
-        self.button_flag = False
         
         # --- Mode Specific Variables ---
         self.analysis_start = 0
@@ -66,35 +64,41 @@ class SpectrumAnalyzer:
 
     def setup_button(self):
         # Pin 14, Pull Up. Button connects to GND.
+        # We removed the IRQ (Interrupt) because it was too sensitive.
         self.btn = machine.Pin(BUTTON_PIN, machine.Pin.IN, machine.Pin.PULL_UP)
-        # Interrupt on falling edge (press)
-        self.btn.irq(trigger=machine.Pin.IRQ_FALLING, handler=self.button_isr)
-
-    def button_isr(self, pin):
-        # Basic debounce using time
-        t = time.ticks_ms()
-        if time.ticks_diff(t, self.last_button_time) > 250:
-            self.last_button_time = t
-            self.button_flag = True
 
     def check_mode_change(self):
-        if self.button_flag:
-            self.button_flag = False
-            self.mode = (self.mode + 1) % 4
-            print(f"Switched to Mode: {self.mode_names[self.mode]}")
+        # POLLING METHOD (Much more stable than interrupts)
+        
+        # 1. Check if button is pressed (LOW because of Pull-Up)
+        if self.btn.value() == 0:
             
-            # Reset mode specific stuff
-            self.analysis_start = 0
-            self.analysis_done = False
-            self.db_min = 999
-            self.db_max = -999
+            # 2. Debounce: Wait 50ms to ignore noise spikes
+            time.sleep(0.05)
             
-            # Show splash screen
-            self.oled.fill(0)
-            self.oled.text(self.mode_names[self.mode], 10, 30)
-            self.oled.show()
-            time.sleep(0.5)
-            return True
+            # 3. Check again: Is it STILL pressed?
+            if self.btn.value() == 0:
+                # It's a real press! Switch mode.
+                self.mode = (self.mode + 1) % 4
+                print(f"Switched to Mode: {self.mode_names[self.mode]}")
+                
+                # Reset mode specific stuff
+                self.analysis_start = 0
+                self.analysis_done = False
+                self.db_min = 999
+                self.db_max = -999
+                
+                # Show splash screen
+                self.oled.fill(0)
+                self.oled.text(self.mode_names[self.mode], 10, 30)
+                self.oled.show()
+                time.sleep(0.5)
+                
+                # 4. WAIT FOR RELEASE (Prevent cycling if you hold it down)
+                while self.btn.value() == 0:
+                    time.sleep(0.01)
+                    
+                return True
         return False
 
     def read_audio(self):
