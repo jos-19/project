@@ -13,19 +13,28 @@ MIC_PIN = 34
 # --- FFT Configuration ---
 SAMPLE_LENGTH = 128 
 
+# --- ZOOM SETTINGS ---
+# Change these to zoom in on specific parts of the audio
+# Previous auto-scale was approx 0 to 10000Hz.
+# User Request: 100Hz to 1000Hz (Bass/Low Mids)
+MIN_FREQ_HZ = 100  
+MAX_FREQ_HZ = 1000 
+
 class SpectrumAnalyzer:
     def __init__(self):
         self.setup_display()
         self.setup_mic()
         
         # --- AUTO-CALIBRATION ---
-        # We measure how fast Python can actually read the microphone.
-        # This determines the real "Max Frequency" we can display.
         self.real_sampling_rate = self.measure_sampling_rate()
-        self.max_freq_hz = self.real_sampling_rate / 2
+        self.max_detectable_freq = self.real_sampling_rate / 2
         
-        print(f"Measured Sampling Rate: {self.real_sampling_rate} Hz")
-        print(f"Max Detectable Freq: {self.max_freq_hz} Hz")
+        # Calculate Frequency per Bin (Hz Resolution)
+        # e.g., if rate is 6000Hz, and samples is 128, resolution is ~46Hz per bin.
+        self.hz_per_bin = self.real_sampling_rate / SAMPLE_LENGTH
+        
+        print(f"Sampling Rate: {self.real_sampling_rate} Hz")
+        print(f"Resolution: {self.hz_per_bin:.1f} Hz per bar")
 
     def setup_display(self):
         print("Initializing SH1106 OLED...")
@@ -54,10 +63,6 @@ class SpectrumAnalyzer:
         return raw_samples
 
     def measure_sampling_rate(self):
-        """
-        Runs the audio reader 5 times to calculate the average
-        sampling rate in Hz.
-        """
         # Warmup
         self.read_audio()
         
@@ -72,8 +77,6 @@ class SpectrumAnalyzer:
             
         avg_time_per_block = total_time_us / iterations
         avg_time_per_sample_us = avg_time_per_block / SAMPLE_LENGTH
-        
-        # Frequency = 1,000,000 microseconds / microseconds per sample
         hz = 1000000 / avg_time_per_sample_us
         return int(hz)
 
@@ -81,38 +84,56 @@ class SpectrumAnalyzer:
         self.oled.fill(0)
         
         DIVISOR = 25 
-        BAR_BOTTOM = 54 # Leave 10 pixels at bottom for text
+        BAR_BOTTOM = 54 
         
-        # 1. Draw the Bars
-        for i, mag in enumerate(magnitudes):
-            if i >= 64: break 
+        # 1. Filter Data to Zoom Range
+        # Calculate which array indices correspond to our Hz range
+        start_index = int(MIN_FREQ_HZ / self.hz_per_bin)
+        end_index = int(MAX_FREQ_HZ / self.hz_per_bin)
+        
+        # Safety Checks
+        if start_index < 0: start_index = 0
+        if end_index >= len(magnitudes): end_index = len(magnitudes) - 1
+        if end_index <= start_index: end_index = start_index + 1
+        
+        # Slice the data to only the bars we want
+        zoom_data = magnitudes[start_index:end_index]
+        num_bars = len(zoom_data)
+        
+        # 2. Calculate Dynamic Bar Width
+        # Stretch the bars to fill the 128px width
+        if num_bars > 0:
+            bar_width = int(OLED_WIDTH / num_bars)
+        else:
+            bar_width = 2
             
+        # 3. Draw the Bars
+        for i, mag in enumerate(zoom_data):
             h = int(mag / DIVISOR)
             if h > BAR_BOTTOM: h = BAR_BOTTOM
             
-            # x_pos, y_pos, width, height, color
-            # Draw from BAR_BOTTOM upwards
-            x_pos = i * 2
-            self.oled.fill_rect(x_pos, BAR_BOTTOM - h, 2, h, 1)
+            x_pos = i * bar_width
             
-        # 2. Draw the Scale (Axis)
-        # Draw a line separating bars from text
+            # fill_rect(x, y, w, h, c)
+            # We subtract 1 from width to leave a tiny gap between bars for looks
+            w = bar_width - 1 if bar_width > 2 else bar_width
+            
+            self.oled.fill_rect(x_pos, BAR_BOTTOM - h, w, h, 1)
+            
+        # 4. Draw Scale & Labels
         self.oled.hline(0, BAR_BOTTOM + 1, 128, 1)
         
-        # Label 1: Start (0 Hz)
-        self.oled.text("0", 0, 56)
+        # Draw Left Label
+        self.oled.text(str(MIN_FREQ_HZ), 0, 56)
         
-        # Label 2: Middle
-        mid_freq = int(self.max_freq_hz / 2)
-        mid_text = f"{mid_freq/1000:.1f}k" if mid_freq >= 1000 else str(mid_freq)
-        # Center the text roughly (subtract 15px from center)
-        self.oled.text(mid_text, 50, 56)
-        
-        # Label 3: Max
-        max_freq = int(self.max_freq_hz)
-        max_text = f"{max_freq/1000:.1f}k" if max_freq >= 1000 else str(max_freq)
-        # Right align roughly (subtract text width)
-        self.oled.text(max_text, 95, 56)
+        # Draw Right Label (1000 -> 1k)
+        if MAX_FREQ_HZ >= 1000:
+            right_lbl = f"{MAX_FREQ_HZ//1000}k"
+        else:
+            right_lbl = str(MAX_FREQ_HZ)
+            
+        # Align right text roughly
+        self.oled.text(right_lbl, 128 - (len(right_lbl)*8), 56)
             
         self.oled.show()
 
@@ -120,15 +141,9 @@ class SpectrumAnalyzer:
         print("Starting Spectrum Analyzer...")
         while True:
             try:
-                # 1. Acquire Data
                 raw_data = self.read_audio()
-                
-                # 2. Math
                 mags = fft.get_magnitude(raw_data)
-                
-                # 3. Display
                 self.draw_spectrum(mags)
-                
             except KeyboardInterrupt:
                 print("Stopping.")
                 break
