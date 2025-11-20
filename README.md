@@ -13,7 +13,7 @@ The main objective of the project is to listen to the surrounding audio and disp
 
 ## Hardware components
 * Screen: SH1106
-* Microfone: LM393
+* Microfone: MAX4466
 * Microcontroller: ESP32
 
 
