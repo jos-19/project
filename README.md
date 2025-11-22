@@ -95,10 +95,10 @@ def main_loop():
 
 # References & Resources
 
-* FFT Info: SciPy FFT Tutorial
-* Audio Theory: Audio Analysis - Time/Frequency Domain
-* Filtering: FIR Filters Guide
-* import scipy.fft info:https://docs.scipy.org/doc/scipy/tutorial/fft.html#fast-fourier-transforms
+* FFT Info: SciPy FFT Tutorial https://docs.scipy.org/doc/scipy/tutorial/fft.html#fast-fourier-transforms
+* Audio Theory: Audio Analysis - Time/Frequency Domain https://www.tecnare.com/es/article/analisis-de-fourier-aplicado-al-audio-dominio-tiempo-frecuencia/
+* Filtering: FIR Filters Guide https://pysdr.org/es/content-es/filters.html
+* import scipy.fft info: https://docs.scipy.org/doc/scipy/tutorial/fft.html#fast-fourier-transforms
 * Audio compression using DCT https://mate.dm.uba.ar/~asalort/varios/dct1d/dct1d.html
 * Applications https://www.tecnare.com/es/article/analisis-de-fourier-aplicado-al-audio-dominio-tiempo-frecuencia/
 * Info https://es.python-3.com/?p=266
