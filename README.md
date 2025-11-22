@@ -84,7 +84,7 @@ def main_loop():
         if button_pressed:
             change_visualization_mode()
 ```
-# Libraries & Modules
+# 4. Libraries & Modules
 * machine: For ADC, I2C, and Pin control.
 
 * ulab (or custom FFT implementation): For efficient numerical processing and Fourier Transforms.
@@ -93,7 +93,7 @@ def main_loop():
 
 * bluetooth: For communicating with the mobile app.
 
-# References & Resources
+# 5. References & Resources
 
 * FFT Info: SciPy FFT Tutorial https://docs.scipy.org/doc/scipy/tutorial/fft.html#fast-fourier-transforms
 * Audio Theory: Audio Analysis - Time/Frequency Domain https://www.tecnare.com/es/article/analisis-de-fourier-aplicado-al-audio-dominio-tiempo-frecuencia/
