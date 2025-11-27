@@ -8,8 +8,8 @@ import usocket as socket
 
 # --- NETWORK CONFIG ---
 # <<< IMPORTANT: Update these credentials >>>
-WIFI_SSID = "YOUR_WIFI_SSID"
-WIFI_PASSWORD = "YOUR_WIFI_PASSWORD"
+WIFI_SSID = "New"
+WIFI_PASSWORD = "koer++++"
 # ----------------------
 
 # --- Hardware Configuration ---
