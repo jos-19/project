@@ -32,7 +32,7 @@ SPEECH_BARS     = 20    # Fixed number of bars for Speech Mode
 SAMPLE_LENGTH = 256 
 
 # --- EMBEDDED HTML/JS APP ---
-# This is the "app" served to the phone's browser. It requests data every 100ms.
+# Updated with Button, Grid, Axis Labels, and Fixed Scaling
 HTML_PAGE = """
 <!DOCTYPE html>
 <html>
@@ -40,74 +40,104 @@ HTML_PAGE = """
     <title>ESP32 Spectrum</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
-        body { font-family: Arial, sans-serif; background: #1f2937; color: #fff; text-align: center; margin: 0; padding: 20px;}
-        h1 { font-size: 1.5rem; margin-bottom: 20px; }
-        #canvas-container { display: flex; justify-content: center; align-items: center; width: 100%; }
-        #analyzerCanvas { background: #374151; border-radius: 8px; max-width: 100%; }
-        .info { margin-top: 15px; font-size: 0.9rem; color: #9ca3af; }
+        body { font-family: 'Segoe UI', sans-serif; background: #111827; color: #fff; text-align: center; margin: 0; padding: 20px;}
+        h1 { font-size: 1.5rem; margin-bottom: 10px; color: #10b981; }
+        .card { background: #1f2937; border-radius: 12px; padding: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); max-width: 400px; margin: 0 auto; }
+        #canvas-container { position: relative; margin: 10px 0; border: 1px solid #374151; border-radius: 4px; overflow: hidden;}
+        canvas { display: block; width: 100%; background: #000; }
+        .controls { margin-top: 20px; display: flex; justify-content: center; gap: 10px; }
+        button { background: #3b82f6; color: white; border: none; padding: 12px 24px; border-radius: 8px; font-size: 1rem; font-weight: bold; cursor: pointer; transition: background 0.2s; }
+        button:active { background: #2563eb; transform: translateY(1px); }
+        .info { margin-top: 10px; font-size: 0.9rem; color: #9ca3af; }
     </style>
 </head>
 <body>
-    <h1>ESP32 Audio Analyzer</h1>
-    <div id="canvas-container">
-        <canvas id="analyzerCanvas" width="300" height="200"></canvas>
+    <div class="card">
+        <h1>Audio Analyzer</h1>
+        <div id="canvas-container">
+            <canvas id="analyzerCanvas" width="350" height="220"></canvas>
+        </div>
+        <div class="info" id="status">Connecting...</div>
+        
+        <div class="controls">
+            <button onclick="switchMode()">Next Mode &#8635;</button>
+        </div>
     </div>
-    <div class="info" id="status">Connecting...</div>
 
     <script>
         const canvas = document.getElementById('analyzerCanvas');
         const ctx = canvas.getContext('2d');
-        const barSpacing = 1;
+        // Fixed scale reference to match OLED (3000 is approx a 'loud' signal)
+        const FIXED_MAX_MAG = 3000; 
 
         async function fetchData() {
             try {
                 const response = await fetch('/api/data');
-                if (!response.ok) throw new Error('Network response was not ok');
+                if (!response.ok) throw new Error('Network err');
                 const data = await response.json();
                 drawSpectrum(data);
-                document.getElementById('status').textContent = 'Live Data: ' + data.modeName;
+                document.getElementById('status').textContent = data.modeName;
             } catch (error) {
-                console.error("Error fetching data:", error);
-                document.getElementById('status').textContent = 'Disconnected. Check ESP32.';
+                document.getElementById('status').textContent = 'Disconnected...';
             }
         }
 
-        function drawSpectrum(data) {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.fillStyle = '#10b981'; // Tailwind emerald-500
-
-            // Draw baseline
-            ctx.fillRect(0, canvas.height - 1, canvas.width, 1); 
-
-            // Calculate dynamic bar width based on received data length
-            // This allows the app to adapt between Speech Mode (20 bars) and Wide Mode (128 bars)
-            const barCount = data.magnitudes.length;
-            if (barCount === 0) return;
-            
-            const barWidth = canvas.width / barCount;
-
-            // Normalize heights
-            const maxVal = Math.max(...data.magnitudes, 1000); 
-            const maxHeight = canvas.height - 10; 
-
-            data.magnitudes.forEach((mag, i) => {
-                let height = (mag / maxVal) * maxHeight;
-                if (height < 1) height = 1;
-
-                const x = i * barWidth;
-                const y = canvas.height - height;
-
-                // Use slightly smaller width for spacing, unless bars are very thin
-                let w = barWidth - barSpacing;
-                if (w < 1) w = barWidth; 
-
-                ctx.fillRect(x, y, w, height);
-            });
+        async function switchMode() {
+            try {
+                // Send request to switch mode, ignore response (next fetch will update UI)
+                await fetch('/api/switch_mode');
+            } catch (e) { console.error(e); }
         }
 
-        // Poll the server every 100ms
-        setInterval(fetchData, 100); 
+        function drawSpectrum(data) {
+            const w = canvas.width;
+            const h = canvas.height;
+            const bottomMargin = 20; // Space for labels
+            const graphH = h - bottomMargin;
 
+            ctx.clearRect(0, 0, w, h);
+
+            // 1. Draw Grid
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            // Horizontal lines
+            for(let i=1; i<4; i++) {
+                let y = graphH - (graphH * (i/4));
+                ctx.moveTo(0, y); ctx.lineTo(w, y);
+            }
+            ctx.stroke();
+
+            // 2. Draw Bars
+            ctx.fillStyle = '#10b981'; 
+            const barCount = data.magnitudes.length;
+            
+            if (barCount > 0) {
+                const barWidth = w / barCount;
+                data.magnitudes.forEach((mag, i) => {
+                    // Normalize using FIXED scale so noise doesn't zoom in
+                    let height = (mag / FIXED_MAX_MAG) * graphH;
+                    if (height > graphH) height = graphH; // Clip
+                    
+                    const x = i * barWidth;
+                    const y = graphH - height;
+                    
+                    // Gap logic: if bars are wide, leave a gap. If tiny (Wide mode), no gap.
+                    let gap = barWidth > 5 ? 2 : 0;
+                    ctx.fillRect(x, y, barWidth - gap, height);
+                });
+            }
+
+            // 3. Draw Labels (X-Axis)
+            ctx.fillStyle = '#9ca3af';
+            ctx.font = '12px sans-serif';
+            ctx.textAlign = 'left';
+            ctx.fillText(data.minHz + ' Hz', 5, h - 5);
+            ctx.textAlign = 'right';
+            ctx.fillText(data.maxHz + ' Hz', w - 5, h - 5);
+        }
+
+        setInterval(fetchData, 100); 
     </script>
 </body>
 </html>
@@ -178,26 +208,29 @@ class SpectrumAnalyzer:
         if self.btn.value() == 0:
             time.sleep_ms(100) 
             if self.btn.value() == 0:
-                self.mode = (self.mode + 1) % 4
-                print(f"Switched to Mode: {self.mode_names[self.mode]}")
-                
-                # Reset mode specific stuff
-                self.analysis_start = 0
-                self.analysis_done = False
-                self.db_min = 999
-                self.db_max = -999
-                
-                # Show splash screen
-                self.oled.fill(0)
-                self.oled.text(self.mode_names[self.mode], 10, 30)
-                self.oled.show()
-                time.sleep(0.5)
-                
+                self.cycle_mode() # Use helper function
                 while self.btn.value() == 0:
                     time.sleep_ms(10) 
-                    
                 return True
         return False
+
+    def cycle_mode(self):
+        """Helper to switch mode and reset state (used by Button AND Wifi)"""
+        self.mode = (self.mode + 1) % 4
+        print(f"Switched to Mode: {self.mode_names[self.mode]}")
+        
+        # Reset mode specific stuff
+        self.analysis_start = 0
+        self.analysis_done = False
+        self.db_min = 999
+        self.db_max = -999
+        
+        # Show splash screen
+        self.oled.fill(0)
+        self.oled.text(self.mode_names[self.mode], 10, 30)
+        self.oled.show()
+        # Note: We don't sleep here if called from WiFi to keep response snappy,
+        # but the main loop handles the pause naturally.
 
     def read_audio(self):
         raw_samples = []
@@ -263,34 +296,53 @@ class SpectrumAnalyzer:
         print('Web server started on port 80')
 
     def generate_data_json(self):
-        """Formats the latest processed data into a JSON string."""
+        """Formats data + metadata into a JSON string."""
+        
+        # Determine frequency range for labels based on mode
+        min_hz_val = 0
+        max_hz_val = 0
+        
+        if self.mode == 0: # Speech
+            min_hz_val = 100
+            max_hz_val = 1000
+        elif self.mode == 1: # Wide
+            min_hz_val = 0
+            max_hz_val = int(self.max_freq)
+        
+        # Construct JSON manually
+        json_parts = []
+        json_parts.append(f'"modeName":"{self.mode_names[self.mode]}"')
+        json_parts.append(f'"minHz":"{min_hz_val}"')
+        json_parts.append(f'"maxHz":"{max_hz_val}"')
+        
         if self.mode == 3: # dB Meter
-            # Manually construct simple JSON string for dB mode
-            # Send 20 bars of the same height to represent the 'level'
-            json_str = '{"modeName":"' + self.mode_names[self.mode] + \
-                       '","magnitudes":[' + ','.join([f"{self.latest_db_value:.0f}"] * 20) + \
-                       ']}'
-        else: # Spectrum Modes (0 and 1)
-            # Manually construct simple JSON string for spectrum mode
-            json_str = '{"modeName":"' + self.mode_names[self.mode] + '","magnitudes":[' + \
-                       ','.join([f"{m:.0f}" for m in self.latest_magnitudes]) + ']}'
-        return json_str
+            mag_str = ','.join([f"{self.latest_db_value:.0f}"] * 20)
+        else: # Spectrum Modes
+            mag_str = ','.join([f"{m:.0f}" for m in self.latest_magnitudes])
+            
+        json_parts.append(f'"magnitudes":[{mag_str}]')
+        
+        return '{' + ','.join(json_parts) + '}'
 
     def handle_web_request(self):
-        # Handle incoming connection requests (non-blocking)
         try:
             conn, addr = self.server_socket.accept()
-            conn.settimeout(3.0) # Set a timeout for client connection
+            conn.settimeout(3.0) 
             
             request = conn.recv(1024)
             request = str(request)
             
-            # API endpoint for data
-            if '/api/data' in request:
+            # API: Switch Mode Button
+            if '/api/switch_mode' in request:
+                self.cycle_mode() # Call the python helper
+                response = 'HTTP/1.0 200 OK\r\n\r\nOK'
+
+            # API: Data
+            elif '/api/data' in request:
                 json_data = self.generate_data_json()
                 response = 'HTTP/1.0 200 OK\r\nContent-Type: application/json\r\n\r\n' + json_data
             
-            # Root path for the web page
+            # Page: HTML
             elif '/' in request:
                 response = 'HTTP/1.0 200 OK\r\nContent-Type: text/html\r\n\r\n' + HTML_PAGE
             
@@ -301,7 +353,6 @@ class SpectrumAnalyzer:
             conn.close()
             
         except OSError as e:
-            # Error 11 is EAGAIN/EWOULDBLOCK (expected for non-blocking socket when no connection is ready)
             if e.args[0] == 11: 
                 pass 
             else:
@@ -321,7 +372,6 @@ class SpectrumAnalyzer:
         if start_idx < IGNORE_LOW_BINS: start_idx = IGNORE_LOW_BINS
         if end_idx >= len(magnitudes): end_idx = len(magnitudes)
         
-        # Only happens if range is invalid
         if end_idx <= start_idx: return [0] * num_bars
         
         num_fft_bins_in_range = end_idx - start_idx
@@ -329,25 +379,18 @@ class SpectrumAnalyzer:
         
         display_bars = []
         for i in range(num_bars):
-            # Calculate range for this specific bar
             bin_start = start_idx + int(i * bins_per_bar)
             bin_end = start_idx + int((i + 1) * bins_per_bar)
             
-            # --- THE FIX FOR THE "GAPS" ---
-            # If the resolution is tight, start might equal end (slice width 0).
-            # We force it to grab at least one bin.
             if bin_end == bin_start:
                 bin_end = bin_start + 1
-            # ------------------------------
 
-            # Safety clamp
             if bin_end > len(magnitudes): bin_end = len(magnitudes)
 
             bar_magnitudes = magnitudes[bin_start:bin_end]
             
             mag = 0
             if bar_magnitudes:
-                # Use max magnitude for "peak" detection, looks sharper
                 mag = max(bar_magnitudes)
             
             if mag < NOISE_GATE: mag = 0
@@ -368,34 +411,26 @@ class SpectrumAnalyzer:
         BASE_DIVISOR = 150 # Scaling factor
         BAR_BOTTOM = 53
         
-        # Title
         self.oled.text(title, 0, 0)
         
-        # Setup Bar Parameters
         count = len(bar_magnitudes)
         if count == 0:
              self.oled.text("No Data", 0, 10)
              self.oled.show()
              return
 
-        # Fixed width based on the number of bars calculated
         width = OLED_WIDTH / count 
         
-        # Draw Bars
         for i, mag in enumerate(bar_magnitudes):
-            
-            # Calculate bar height
             h = int((mag / BASE_DIVISOR) * GAIN)
-            if h > (BAR_BOTTOM - 10): h = (BAR_BOTTOM - 10) # Keep below title
+            if h > (BAR_BOTTOM - 10): h = (BAR_BOTTOM - 10) 
             
             x = int(i * width)
             if h > 0:
-                # Draw the bar with 1px spacing
                 w = int(width) - 1
                 if w < 1: w = 1
                 self.oled.fill_rect(x, BAR_BOTTOM - h, w, h, 1)
 
-        # Scale Labels
         self.oled.hline(0, BAR_BOTTOM + 1, 128, 1)
         self.oled.text(self.format_freq(min_hz), 0, 56)
         self.oled.text(self.format_freq(max_hz), 90, 56)
@@ -522,12 +557,10 @@ class SpectrumAnalyzer:
                 mags = fft.get_magnitude(raw_data)
                 
                 if self.mode == 0: # Speech Mode
-                    # Now uses the improved logic for 20 gap-less bars
                     bar_mags = self.calculate_display_bars(mags, 100, 1000, SPEECH_BARS)
                     self.draw_spectrum(bar_mags, 100, 1000, "Speech Mode (20)")
                     
                 elif self.mode == 1: # Wide Mode
-                    # Shows all data across the full screen width
                     bar_mags = self.calculate_display_bars(mags, 0, self.max_freq, OLED_WIDTH)
                     self.draw_spectrum(bar_mags, 0, self.max_freq, "Wide Mode (Full)")
                     
