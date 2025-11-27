@@ -8,8 +8,8 @@ import usocket as socket
 
 # --- NETWORK CONFIG ---
 # <<< IMPORTANT: Update these credentials >>>
-WIFI_SSID = "New"
-WIFI_PASSWORD = "koer++++"
+WIFI_SSID = "YOUR_WIFI_SSID"
+WIFI_PASSWORD = "YOUR_WIFI_PASSWORD"
 # ----------------------
 
 # --- Hardware Configuration ---
@@ -24,7 +24,7 @@ OLED_HEIGHT = 64
 # --- TUNING ---
 IGNORE_LOW_BINS = 2     # Lowered slightly for higher res
 NOISE_GATE      = 400   # Squelch static
-GAIN            = 0.25  # Visual gain
+GAIN            = 3.0   # Visual gain
 SPEECH_BARS     = 20    # Fixed number of bars for Speech Mode
 
 # --- FFT CONFIG ---
