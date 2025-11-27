@@ -1,3 +1,5 @@
+Poster SIZE A3 at least
+
 ## Audio spectrum analyzer
 
 <img width="1066" height="755" alt="Screenshot 2025-11-20 151451" src="https://github.com/user-attachments/assets/37a1bcab-d63e-458c-b9a5-55f53e84ecd9" />
