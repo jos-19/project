@@ -251,15 +251,27 @@ class SpectrumAnalyzer:
             
             if not valid_data: return
             
+            # High Energy (Frequency with max magnitude)
             max_val = max(valid_data)
             max_idx = valid_data.index(max_val) + IGNORE_LOW_BINS
             max_hz = max_idx * self.hz_per_bin
             
+            # Low Energy (Frequency with min magnitude)
+            min_val = min(valid_data)
+            min_idx = valid_data.index(min_val) + IGNORE_LOW_BINS
+            min_hz = min_idx * self.hz_per_bin
+
+            # Average Magnitude (Overall energy average)
+            overall_avg = sum(valid_data) / len(valid_data)
+            
             self.oled.fill(0)
             self.oled.text("--- REPORT ---", 10, 0)
-            self.oled.text("High Energy:", 0, 20)
-            self.oled.text(f"-> {int(max_hz)} Hz", 10, 30)
-            self.oled.text(f"Avg: {int(max_val)}", 10, 40)
+            
+            # Compact layout to fit 3 lines
+            self.oled.text(f"Max: {int(max_hz)} Hz", 0, 15)
+            self.oled.text(f"Min: {int(min_hz)} Hz", 0, 30)
+            self.oled.text(f"Avg: {int(overall_avg)}", 0, 45)
+            
             self.oled.show()
 
     # =========================================
