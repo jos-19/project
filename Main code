@@ -16,7 +16,7 @@ OLED_HEIGHT = 64
 # --- TUNING ---
 IGNORE_LOW_BINS = 2     # Lowered slightly for higher res
 NOISE_GATE      = 400   # Squelch static
-GAIN            = 3.0   # Visual gain
+GAIN            = 0.25   # Visual gain
 SPEECH_BARS     = 20    # Fixed number of bars for Speech Mode
 
 # --- FFT CONFIG ---
