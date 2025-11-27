@@ -28,7 +28,6 @@ GAIN            = 3.0   # Visual gain
 SPEECH_BARS     = 20    # Fixed number of bars for Speech Mode
 
 # --- FFT CONFIG ---
-# INCREASED TO 256: This doubles the frequency resolution to fix the "gaps"
 SAMPLE_LENGTH = 256 
 
 # --- EMBEDDED HTML/JS APP ---
@@ -41,19 +40,30 @@ HTML_PAGE = """
     <style>
         body { font-family: 'Segoe UI', sans-serif; background: #111827; color: #fff; text-align: center; margin: 0; padding: 20px;}
         h1 { font-size: 1.5rem; margin-bottom: 10px; color: #10b981; }
-        .card { background: #1f2937; border-radius: 12px; padding: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); max-width: 400px; margin: 0 auto; position: relative;}
+        .card { background: #1f2937; border-radius: 12px; padding: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); max-width: 400px; margin: 0 auto; position: relative; min-height: 300px;}
+        
+        /* Container for the Graph (Spectrum Mode) */
         #canvas-container { position: relative; margin: 10px 0; border: 1px solid #374151; border-radius: 4px; overflow: hidden; height: 220px;}
         canvas { display: block; width: 100%; height: 100%; background: #000; }
         
-        /* New Text Overlay for Analyzer Mode */
+        /* Overlay for Analyzer Text */
         #text-overlay { 
             position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
-            background: #1f2937; display: flex; flex-direction: column; 
+            background: #1f2937; display: none; flex-direction: column; 
             justify-content: center; align-items: center; 
-            display: none; /* Hidden by default */
         }
         .stat-line { font-size: 1.2rem; margin: 5px 0; color: #60a5fa; }
-        
+
+        /* SPECIAL VIEW: dB Meter (Matches OLED) */
+        #db-view {
+            display: none; flex-direction: column; justify-content: center; align-items: center;
+            height: 220px; background: #000; border-radius: 4px; border: 1px solid #374151;
+        }
+        .db-main { font-size: 3.5rem; font-weight: bold; color: #facc15; }
+        .db-stats { display: flex; gap: 20px; margin-top: 20px; color: #9ca3af; font-size: 1rem; }
+        .db-bar-bg { width: 80%; height: 20px; background: #333; margin-top: 20px; border-radius: 10px; overflow: hidden; }
+        .db-bar-fill { height: 100%; background: #facc15; width: 0%; transition: width 0.3s; }
+
         .controls { margin-top: 20px; display: flex; justify-content: center; gap: 10px; }
         button { background: #3b82f6; color: white; border: none; padding: 12px 24px; border-radius: 8px; font-size: 1rem; font-weight: bold; cursor: pointer; transition: background 0.2s; }
         button:active { background: #2563eb; transform: translateY(1px); }
@@ -63,14 +73,29 @@ HTML_PAGE = """
 <body>
     <div class="card">
         <h1>Audio Analyzer</h1>
+        
+        <!-- View 1: Spectrum Canvas -->
         <div id="canvas-container">
             <canvas id="analyzerCanvas" width="350" height="220"></canvas>
+            
+            <!-- View 2: Analyzer Text Overlay -->
             <div id="text-overlay">
                 <div class="stat-line" id="line1">--</div>
                 <div class="stat-line" id="line2">--</div>
                 <div class="stat-line" id="line3">--</div>
             </div>
         </div>
+
+        <!-- View 3: dB Meter Big Display -->
+        <div id="db-view">
+            <div class="db-main" id="db-val">0.0 dB</div>
+            <div class="db-bar-bg"><div class="db-bar-fill" id="db-fill"></div></div>
+            <div class="db-stats">
+                <span id="db-min">Min: 0</span>
+                <span id="db-max">Max: 0</span>
+            </div>
+        </div>
+
         <div class="info" id="status">Connecting...</div>
         
         <div class="controls">
@@ -80,7 +105,10 @@ HTML_PAGE = """
 
     <script>
         const canvas = document.getElementById('analyzerCanvas');
+        const canvasContainer = document.getElementById('canvas-container');
         const overlay = document.getElementById('text-overlay');
+        const dbView = document.getElementById('db-view');
+        
         const ctx = canvas.getContext('2d');
         const FIXED_MAX_MAG = 3000; 
 
@@ -101,22 +129,42 @@ HTML_PAGE = """
         }
 
         function updateUI(data) {
-            // Check for Analyzer Mode text content
+            // MODE 3: dB Meter
+            if (data.modeName === "dB Meter") {
+                canvasContainer.style.display = 'none';
+                dbView.style.display = 'flex';
+                
+                document.getElementById('db-val').textContent = data.dbValue + " dB";
+                document.getElementById('db-min').textContent = "Min: " + data.dbMin;
+                document.getElementById('db-max').textContent = "Max: " + data.dbMax;
+                
+                // Scale bar 0-100%
+                let pct = parseFloat(data.dbValue);
+                if (pct > 100) pct = 100;
+                document.getElementById('db-fill').style.width = pct + "%";
+                return;
+            }
+
+            // MODE 2: Analyzer (Text Report)
             if (data.reportText && data.reportText.length > 0) {
-                // Show Text Overlay, Hide Canvas
+                canvasContainer.style.display = 'block';
                 canvas.style.display = 'none';
                 overlay.style.display = 'flex';
+                dbView.style.display = 'none';
                 
                 const lines = data.reportText.split('|');
                 document.getElementById('line1').textContent = lines[0] || "";
                 document.getElementById('line2').textContent = lines[1] || "";
                 document.getElementById('line3').textContent = lines[2] || "";
-            } else {
-                // Show Canvas, Hide Text Overlay
-                canvas.style.display = 'block';
-                overlay.style.display = 'none';
-                drawSpectrum(data);
-            }
+                return;
+            } 
+            
+            // MODES 0 & 1: Spectrum Graph
+            canvasContainer.style.display = 'block';
+            canvas.style.display = 'block';
+            overlay.style.display = 'none';
+            dbView.style.display = 'none';
+            drawSpectrum(data);
         }
 
         function drawSpectrum(data) {
@@ -164,7 +212,6 @@ HTML_PAGE = """
             ctx.fillText(data.maxHz + ' Hz', w - 5, h - 5);
         }
 
-        // SLOWED DOWN POLLING to 300ms to fix button lag
         setInterval(fetchData, 300); 
     </script>
 </body>
@@ -194,7 +241,7 @@ class SpectrumAnalyzer:
         self.mode_names = ["Speech Zoom", "Wide Range", "Analyzer", "dB Meter"]
         self.latest_magnitudes = [0] * SPEECH_BARS 
         self.latest_db_value = 0.0
-        self.latest_report_text = "" # For Analyzer Mode text
+        self.latest_report_text = "" 
         
         # --- Mode Specific Variables ---
         self.analysis_start = 0
@@ -223,13 +270,11 @@ class SpectrumAnalyzer:
         self.oled.show()
 
     def setup_mic(self):
-        # Configure the ADC pin for the microphone
         self.adc = machine.ADC(machine.Pin(MIC_PIN))
-        self.adc.width(machine.ADC.WIDTH_12BIT)  # 0 to 4095
-        self.adc.atten(machine.ADC.ATTN_11DB)    # Full voltage range
+        self.adc.width(machine.ADC.WIDTH_12BIT)
+        self.adc.atten(machine.ADC.ATTN_11DB)
 
     def setup_button(self):
-        # Configure Pin 14 with internal Pull Up. Button connects to GND.
         self.btn = machine.Pin(BUTTON_PIN, machine.Pin.IN, machine.Pin.PULL_UP)
 
     def check_mode_change(self):
@@ -237,25 +282,23 @@ class SpectrumAnalyzer:
         if self.btn.value() == 0:
             time.sleep_ms(100) 
             if self.btn.value() == 0:
-                self.cycle_mode() # Use helper function
+                self.cycle_mode() 
                 while self.btn.value() == 0:
                     time.sleep_ms(10) 
                 return True
         return False
 
     def cycle_mode(self):
-        """Helper to switch mode and reset state (used by Button AND Wifi)"""
+        """Helper to switch mode and reset state"""
         self.mode = (self.mode + 1) % 4
         print(f"Switched to Mode: {self.mode_names[self.mode]}")
         
-        # Reset mode specific stuff
         self.analysis_start = 0
         self.analysis_done = False
         self.db_min = 999
         self.db_max = -999
-        self.latest_report_text = "" # Clear text
+        self.latest_report_text = "" 
         
-        # Show splash screen
         self.oled.fill(0)
         self.oled.text(self.mode_names[self.mode], 10, 30)
         self.oled.show()
@@ -268,7 +311,7 @@ class SpectrumAnalyzer:
         return raw_samples
 
     def measure_sampling_rate(self):
-        self.read_audio() # Prime the system
+        self.read_audio()
         start = time.ticks_us()
         self.read_audio()
         end = time.ticks_us()
@@ -326,7 +369,6 @@ class SpectrumAnalyzer:
 
     def generate_data_json(self):
         """Formats data + metadata into a JSON string."""
-        
         min_hz_val = 0
         max_hz_val = 0
         
@@ -341,17 +383,16 @@ class SpectrumAnalyzer:
         json_parts.append(f'"modeName":"{self.mode_names[self.mode]}"')
         json_parts.append(f'"minHz":"{min_hz_val}"')
         json_parts.append(f'"maxHz":"{max_hz_val}"')
-        
-        # Send text report if Analyzer mode
         json_parts.append(f'"reportText":"{self.latest_report_text}"')
         
-        if self.mode == 3: # dB Meter
-            # SCALING FIX: Multiply dB (0-100) by 30 to fill the 0-3000 range of the graph
-            scaled_db = self.latest_db_value * 30
-            mag_str = ','.join([f"{scaled_db:.0f}"] * 20)
-        else: # Spectrum Modes
-            mag_str = ','.join([f"{m:.0f}" for m in self.latest_magnitudes])
-            
+        # ADD DB METADATA FOR WEB APP
+        if self.mode == 3: 
+             json_parts.append(f'"dbValue":"{self.latest_db_value:.1f}"')
+             json_parts.append(f'"dbMin":"{self.db_min:.0f}"')
+             json_parts.append(f'"dbMax":"{self.db_max:.0f}"')
+        
+        # Spectrums
+        mag_str = ','.join([f"{m:.0f}" for m in self.latest_magnitudes])
         json_parts.append(f'"magnitudes":[{mag_str}]')
         
         return '{' + ','.join(json_parts) + '}'
@@ -391,7 +432,6 @@ class SpectrumAnalyzer:
     # CORE: Calculate the magnitudes for display bars 
     # =========================================
     def calculate_display_bars(self, magnitudes, min_hz, max_hz, num_bars):
-        
         start_idx = int(min_hz / self.hz_per_bin)
         end_idx  = int(max_hz / self.hz_per_bin)
         
@@ -424,7 +464,7 @@ class SpectrumAnalyzer:
     # =========================================
     def draw_spectrum(self, bar_magnitudes, min_hz, max_hz, title):
         self.latest_magnitudes = bar_magnitudes
-        self.latest_report_text = "" # Clear report
+        self.latest_report_text = "" 
 
         self.oled.fill(0)
         BASE_DIVISOR = 150 
@@ -472,12 +512,10 @@ class SpectrumAnalyzer:
         elapsed = time.time() - self.analysis_start
         
         if elapsed < 5:
-            # Running...
             for i in range(len(magnitudes)):
                 self.analysis_accum[i] += magnitudes[i]
             self.analysis_count += 1
             
-            # Update OLED
             self.oled.fill(0)
             self.oled.text("Measuring...", 10, 10)
             self.oled.text(f"Time: {5 - int(elapsed)}s", 10, 25)
@@ -486,11 +524,9 @@ class SpectrumAnalyzer:
             self.oled.fill_rect(14, 40, bar_w, 10, 1)
             self.oled.show()
             
-            # Update Web App Text
             self.latest_report_text = f"Measuring...|Time: {5 - int(elapsed)}s| "
             
         else:
-            # Finished
             self.analysis_done = True
             
             if self.analysis_count == 0: return
@@ -516,14 +552,13 @@ class SpectrumAnalyzer:
             self.oled.text(f"Avg: {int(overall_avg)}", 0, 45)
             self.oled.show()
             
-            # Update Web App Text with Final Report (Pipe | used as line break)
             self.latest_report_text = f"Max: {int(max_hz)} Hz|Min: {int(min_hz)} Hz|Avg: {int(overall_avg)}"
 
     # =========================================
     # MODE 3: dB METER
     # =========================================
     def run_db_meter(self, raw_data):
-        self.latest_report_text = "" # Clear report
+        self.latest_report_text = "" 
 
         avg = sum(raw_data) / len(raw_data)
         centered = [x - avg for x in raw_data]
