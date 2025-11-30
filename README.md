@@ -95,7 +95,13 @@ def main_loop():
 
 * bluetooth: For communicating with the mobile app.
 
-# 5. References & Resources
+# 5. Phase 2
+* Scematic
+  
+<img width="1497" height="920" alt="Schematic_New-Project_2025-11-30-1" src="https://github.com/user-attachments/assets/1799aa26-7ab0-4a73-8bd4-fab9bf662a34" />
+
+
+# 6. References & Resources
 
 * FFT Info: SciPy FFT Tutorial https://docs.scipy.org/doc/scipy/tutorial/fft.html#fast-fourier-transforms
 * Audio Theory: Audio Analysis - Time/Frequency Domain https://www.tecnare.com/es/article/analisis-de-fourier-aplicado-al-audio-dominio-tiempo-frecuencia/
