@@ -96,7 +96,7 @@ def main_loop():
 * bluetooth: For communicating with the mobile app.
 
 # 5. Phase 2
-* Scematic
+* Circuit schematic
   
 <img width="1497" height="920" alt="Schematic_New-Project_2025-11-30-1" src="https://github.com/user-attachments/assets/1799aa26-7ab0-4a73-8bd4-fab9bf662a34" />
 
