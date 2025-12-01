@@ -2,8 +2,7 @@ Poster SIZE A3 at least
 
 ## Audio spectrum analyzer
 
-<img width="1066" height="755" alt="Screenshot 2025-11-20 151451" src="https://github.com/user-attachments/assets/37a1bcab-d63e-458c-b9a5-55f53e84ecd9" />
-
+<img width="1920" height="1080" alt="Story Mind Map Brainstorm Whiteboard in Blue Orange Minimal Style" src="https://github.com/user-attachments/assets/52754c16-3b55-46a5-9f7c-17536bf150cb" />
 
 ## 1. Problem Statement & Solution Overview
 
