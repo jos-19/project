@@ -106,7 +106,7 @@ youtube link here
 ## Documentation
 **(https://jos-19.github.io/project/)**
 
-* Circuit schematic
+## Circuit schematic
   
 <img width="1497" height="920" alt="Schematic_New-Project_2025-11-30-1" src="https://github.com/user-attachments/assets/1799aa26-7ab0-4a73-8bd4-fab9bf662a34" />
 
