@@ -127,10 +127,30 @@ youtube link here
 
 # 6. References & Resources
 
-* FFT Info: SciPy FFT Tutorial https://docs.scipy.org/doc/scipy/tutorial/fft.html#fast-fourier-transforms
-* Audio Theory: Audio Analysis - Time/Frequency Domain https://www.tecnare.com/es/article/analisis-de-fourier-aplicado-al-audio-dominio-tiempo-frecuencia/
-* Filtering: FIR Filters Guide https://pysdr.org/es/content-es/filters.html
-* Audio compression using DCT https://mate.dm.uba.ar/~asalort/varios/dct1d/dct1d.html
-* Applications https://www.tecnare.com/es/article/analisis-de-fourier-aplicado-al-audio-dominio-tiempo-frecuencia/
-* Info https://es.python-3.com/?p=266
-* FIR https://www.tecnare.com/es/article/la-importancia-de-los-filtros-fir/
+
+
+### Software Libraries & Drivers
+This project utilizes specific MicroPython libraries and custom drivers to interface with hardware.
+* **MicroPython Standard Library:** Core hardware control (`machine`, `network`, `usocket`).
+    * [MicroPython Documentation](https://docs.micropython.org/en/latest/library/index.html)
+* **SH1106 OLED Driver:** Custom driver for the 1.3" OLED display using the I2C protocol.
+    * [SH1106 Source Repository](https://github.com/robert-hh/SH1106)
+* **`cmath` (Complex Math):** Python standard library used for complex number exponentials required by the recursive FFT algorithm.
+    * [Python cmath Documentation](https://docs.python.org/3/library/cmath.html)
+
+### Key Algorithms & Signal Processing
+We implemented custom signal processing algorithms to avoid heavy external dependencies.
+* **FFT Implementation (Cooley-Tukey):** We used a recursive implementation of the Cooley-Tukey algorithm to optimize the discrete Fourier transform for the ESP32.
+    * *Reference:* [SciPy FFT Tutorial](https://docs.scipy.org/doc/scipy/tutorial/fft.html#fast-fourier-transforms)
+    * *Algorithm Guide:* [Fast Fourier Transform Information](https://es.python-3.com/?p=266)
+* **Windowing Functions:** A Hanning Window is applied to audio samples to reduce spectral leakage before processing.
+    * *Concept:* [Audio Analysis - Time/Frequency Domain](https://www.tecnare.com/es/article/analisis-de-fourier-aplicado-al-audio-dominio-tiempo-frecuencia/)
+* **Digital Filtering:** Concepts of Finite Impulse Response (FIR) were reviewed for signal conditioning.
+    * *Reference:* [FIR Filters Guide](https://pysdr.org/es/content-es/filters.html)
+    * *Additional Reading:* [Importance of FIR Filters](https://www.tecnare.com/es/article/la-importancia-de-los-filtros-fir/)
+
+### Audio Theory & Applications
+Background research used to design the visualization and metering logic.
+* **Audio Compression:** Investigated Discrete Cosine Transform (DCT) for potential compression techniques.
+    * *Source:* [Audio compression using DCT](https://mate.dm.uba.ar/~asalort/varios/dct1d/dct1d.html)
+* **Decibel Calculation:** Implemented Root Mean Square (RMS) calculations to derive accurate dB levels from raw ADC data.
