@@ -38,6 +38,10 @@ The software will be written entirely in **MicroPython**. The architecture is di
 * **Statistical Analysis:** Tracks Min/Max dB values and identifies the most/least occupied frequency bands.
 * **Remote Control:** BLE/Wi-Fi commands to change settings.
 
+### Block Diagram
+
+<img width="963" height="789" alt="icrophone (MAX4466)" src="https://github.com/user-attachments/assets/7bf1a5eb-3fe4-4ab9-9995-54a794bcaf6c" />
+
 ### Logic Flow (Pseudocode)
 
 ```python
