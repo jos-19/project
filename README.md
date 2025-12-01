@@ -125,7 +125,7 @@ youtube link here
 <img width="1497" height="920" alt="Schematic_New-Project_2025-11-30-1" src="https://github.com/user-attachments/assets/1799aa26-7ab0-4a73-8bd4-fab9bf662a34" />
 
 
-## 6. References & Resources
+## 6 References & Resources
 
 ### 1. Web Interface & Networking (WiFi & Dashboard)
 Resources used to build the asynchronous web server and the real-time browser graph.
@@ -136,15 +136,13 @@ Resources used to build the asynchronous web server and the real-time browser gr
     * [MDN Canvas API Tutorial](https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API/Tutorial)
 * **JavaScript Fetch API:** The webpage uses `fetch()` to request JSON data from the ESP32 without reloading the page (AJAX).
     * [MDN Fetch API Documentation](https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API)
-* **CSS Flexbox:** Used for the responsive layout of the dashboard cards.
-    * [CSS Flexbox Guide](https://css-tricks.com/snippets/css/a-guide-to-flexbox/)
 
 ### 2. Software Libraries & Drivers
 External drivers and core libraries used for hardware control.
 * **MicroPython Standard Library:** Core hardware control (`machine` for I2C/ADC).
     * [MicroPython Documentation](https://docs.micropython.org/en/latest/library/index.html)
-* **SH1106 OLED Driver:** Custom driver for the 1.3" OLED display using I2C.
-    * [SH1106 Source Repository](https://github.com/robert-hh/SH1106)
+* **SH1106 OLED Driver (Course Module):** Driver provided by the course instructor for the 1.3" OLED display.
+    * [Source: tomas-fryza/esp-micropython](https://github.com/tomas-fryza/esp-micropython/blob/main/modules/sh1106.py)
 * **`cmath` (Complex Math):** Python standard library used for complex number exponentials required by the recursive FFT algorithm.
     * [Python cmath Documentation](https://docs.python.org/3/library/cmath.html)
 
