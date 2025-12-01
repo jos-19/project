@@ -125,32 +125,42 @@ youtube link here
 <img width="1497" height="920" alt="Schematic_New-Project_2025-11-30-1" src="https://github.com/user-attachments/assets/1799aa26-7ab0-4a73-8bd4-fab9bf662a34" />
 
 
-# 6. References & Resources
+## 6. References & Resources
 
+### 1. Web Interface & Networking (WiFi & Dashboard)
+Resources used to build the asynchronous web server and the real-time browser graph.
+* **MicroPython Network & Sockets:** Used `network` for WiFi connection and `usocket` for creating the non-blocking HTTP server.
+    * [MicroPython Network Docs](https://docs.micropython.org/en/latest/library/network.html)
+    * [MicroPython Socket Docs](https://docs.micropython.org/en/latest/library/usocket.html)
+* **HTML5 Canvas API:** The "Spectrum" graph on the webpage is drawn using the HTML5 `<canvas>` element and JavaScript.
+    * [MDN Canvas API Tutorial](https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API/Tutorial)
+* **JavaScript Fetch API:** The webpage uses `fetch()` to request JSON data from the ESP32 without reloading the page (AJAX).
+    * [MDN Fetch API Documentation](https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API)
+* **CSS Flexbox:** Used for the responsive layout of the dashboard cards.
+    * [CSS Flexbox Guide](https://css-tricks.com/snippets/css/a-guide-to-flexbox/)
 
-
-### Software Libraries & Drivers
-This project utilizes specific MicroPython libraries and custom drivers to interface with hardware.
-* **MicroPython Standard Library:** Core hardware control (`machine`, `network`, `usocket`).
+### 2. Software Libraries & Drivers
+External drivers and core libraries used for hardware control.
+* **MicroPython Standard Library:** Core hardware control (`machine` for I2C/ADC).
     * [MicroPython Documentation](https://docs.micropython.org/en/latest/library/index.html)
-* **SH1106 OLED Driver:** Custom driver for the 1.3" OLED display using the I2C protocol.
+* **SH1106 OLED Driver:** Custom driver for the 1.3" OLED display using I2C.
     * [SH1106 Source Repository](https://github.com/robert-hh/SH1106)
 * **`cmath` (Complex Math):** Python standard library used for complex number exponentials required by the recursive FFT algorithm.
     * [Python cmath Documentation](https://docs.python.org/3/library/cmath.html)
 
-### Key Algorithms & Signal Processing
-We implemented custom signal processing algorithms to avoid heavy external dependencies.
-* **FFT Implementation (Cooley-Tukey):** We used a recursive implementation of the Cooley-Tukey algorithm to optimize the discrete Fourier transform for the ESP32.
+### 3. Key Algorithms & Signal Processing
+Custom algorithms implemented for DSP and signal analysis.
+* **FFT Implementation (Cooley-Tukey):** Recursive implementation of the Cooley-Tukey algorithm for the ESP32.
     * *Reference:* [SciPy FFT Tutorial](https://docs.scipy.org/doc/scipy/tutorial/fft.html#fast-fourier-transforms)
     * *Algorithm Guide:* [Fast Fourier Transform Information](https://es.python-3.com/?p=266)
-* **Windowing Functions:** A Hanning Window is applied to audio samples to reduce spectral leakage before processing.
+* **Windowing Functions:** A Hanning Window is applied to audio samples to reduce spectral leakage.
     * *Concept:* [Audio Analysis - Time/Frequency Domain](https://www.tecnare.com/es/article/analisis-de-fourier-aplicado-al-audio-dominio-tiempo-frecuencia/)
 * **Digital Filtering:** Concepts of Finite Impulse Response (FIR) were reviewed for signal conditioning.
     * *Reference:* [FIR Filters Guide](https://pysdr.org/es/content-es/filters.html)
     * *Additional Reading:* [Importance of FIR Filters](https://www.tecnare.com/es/article/la-importancia-de-los-filtros-fir/)
 
-### Audio Theory & Applications
-Background research used to design the visualization and metering logic.
-* **Audio Compression:** Investigated Discrete Cosine Transform (DCT) for potential compression techniques.
+### 4. Audio Theory & Applications
+Background research used to design the metering logic.
+* **Audio Compression:** Investigated Discrete Cosine Transform (DCT).
     * *Source:* [Audio compression using DCT](https://mate.dm.uba.ar/~asalort/varios/dct1d/dct1d.html)
-* **Decibel Calculation:** Implemented Root Mean Square (RMS) calculations to derive accurate dB levels from raw ADC data.
+* **Decibel Calculation:** Implemented Root Mean Square (RMS) calculations to derive accurate dB levels.
