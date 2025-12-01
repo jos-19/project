@@ -109,6 +109,17 @@ youtube link here
 ## Documentation
 **(https://jos-19.github.io/project/)**
 
+### File Structure
+```text
+├── main.py              # Entry point: orchestrates Audio, Display, and Network
+├── config.py            # Central configuration (Pins, WiFi, Audio Tuning)
+├── audio_processor.py   # Handles ADC sampling and dB calculations
+├── fft.py               # Custom pure-Python FFT implementation
+├── display_manager.py   # Manages OLED drawing and I2C communication
+├── network_manager.py   # Asynchronous Web Server & HTML content
+└── docs/                # Sphinx documentation source files
+``` 
+
 ## Circuit schematic
   
 <img width="1497" height="920" alt="Schematic_New-Project_2025-11-30-1" src="https://github.com/user-attachments/assets/1799aa26-7ab0-4a73-8bd4-fab9bf662a34" />
