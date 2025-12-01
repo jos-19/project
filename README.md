@@ -101,6 +101,9 @@ def main_loop():
 # 5. Phase 2
 
 ## Project Demo
+
+![PXL_20251127_145709558](https://github.com/user-attachments/assets/2d00860d-604d-4f28-92fd-ef1b7873f49a)
+
 youtube link here
 
 ## Documentation
