@@ -1,7 +1,7 @@
 import machine
 import math
 import time
-import fft  # Your existing pure python library
+import fft
 import config
 
 class AudioProcessor:
@@ -23,7 +23,7 @@ class AudioProcessor:
         print(f"Audio Init: {self.real_sampling_rate}Hz | Res: {self.hz_per_bin:.1f}Hz")
 
     def read_audio(self):
-        """Reads raw samples from ADC (Optimized)."""
+        """Reads raw samples from ADC."""
         read_func = self.adc.read
         return [read_func() for _ in range(config.SAMPLE_LENGTH)]
 
@@ -45,51 +45,36 @@ class AudioProcessor:
             return max(0, db)
         return 0.0
 
-    # --- UPDATED FUNCTION FOR BAND MONITOR MODE ---
-    def analyze_bands(self, magnitudes):
+    # --- RESTORED LOGIC FROM OLD CODE ---
+    def calculate_analyzer_stats(self, accumulated_mags, count):
         """
-        Finds the current frame's most and least active frequency bands.
-        Returns: (max_freq, max_magnitude, min_magnitude, min_freq)
+        Takes the accumulated magnitudes and the count of frames.
+        Returns (max_hz, min_hz, overall_avg)
         """
-        if not magnitudes: return (0, 0, 0, 0)
-
-        # Ignore low bins (DC offset/rumble)
-        start_index = config.IGNORE_LOW_BINS
+        if count == 0: return (0, 0, 0)
         
-        active_mags = magnitudes[start_index:]
+        # Calculate Average per bin
+        avgs = [x / count for x in accumulated_mags]
         
-        if not active_mags: return (0, 0, 0, 0)
+        # Slice to ignore DC/Low noise
+        valid_data = avgs[config.IGNORE_LOW_BINS:]
         
-        max_mag = 0
-        max_idx_relative = 0
-        min_mag = 999999 # High starting value
-        min_idx_relative = 0
+        if not valid_data: return (0, 0, 0)
         
-        for i, mag in enumerate(active_mags):
-            # Find Max
-            if mag > max_mag:
-                max_mag = mag
-                max_idx_relative = i
-            
-            # Find Min (only consider quiet bands if they are above a minimal floor)
-            if mag < min_mag and mag > config.NOISE_GATE/2: 
-                min_mag = mag
-                min_idx_relative = i
-            # If the noise gate is too high, we might never register a "quiet" band,
-            # so we'll allow zero to be the min if no other quiet signal is found
-            elif mag == 0 and min_mag == 999999: 
-                 min_mag = 0
-                 min_idx_relative = i
-
-
-        # Convert index back to frequency (Hz)
-        hz_per_bin = self.hz_per_bin
-        final_max_freq = int((max_idx_relative + start_index) * hz_per_bin)
-        final_min_freq = int((min_idx_relative + start_index) * hz_per_bin)
+        # Find Max
+        max_val = max(valid_data)
+        max_idx = valid_data.index(max_val) + config.IGNORE_LOW_BINS
+        max_hz = max_idx * self.hz_per_bin
         
-        # Return (max_freq, max_magnitude, min_magnitude, min_freq)
-        # Note the order is changed to include min_freq at the end
-        return (final_max_freq, max_mag, min_mag, final_min_freq) 
+        # Find Min
+        min_val = min(valid_data)
+        min_idx = valid_data.index(min_val) + config.IGNORE_LOW_BINS
+        min_hz = min_idx * self.hz_per_bin
+        
+        # Overall Average
+        overall_avg = sum(valid_data) / len(valid_data)
+        
+        return (max_hz, min_hz, overall_avg)
 
     def calculate_display_bars(self, magnitudes, min_hz, max_hz, num_bars):
         """Bins FFT data into bars for the display."""
