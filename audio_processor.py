@@ -23,10 +23,7 @@ class AudioProcessor:
         print(f"Audio Init: {self.real_sampling_rate}Hz | Res: {self.hz_per_bin:.1f}Hz")
 
     def read_audio(self):
-        """
-        Reads raw samples from ADC.
-        OPTIMIZED: Uses list comprehension for faster memory allocation.
-        """
+        """Reads raw samples from ADC (Optimized)."""
         read_func = self.adc.read
         return [read_func() for _ in range(config.SAMPLE_LENGTH)]
 
@@ -47,6 +44,43 @@ class AudioProcessor:
             db = 20 * math.log10(rms / 2000.0) + 100 
             return max(0, db)
         return 0.0
+
+    # --- NEW FUNCTION FOR BAND MONITOR MODE ---
+    def analyze_bands(self, magnitudes):
+        """Finds the most and least active frequency bands."""
+        if not magnitudes: return (0, 0, 0, 0)
+
+        # Ignore low bins (DC offset/rumble)
+        start_index = config.IGNORE_LOW_BINS
+        
+        # Filter magnitudes and get indices relative to the start_index
+        active_mags = magnitudes[start_index:]
+        
+        if not active_mags: return (0, 0, 0, 0)
+        
+        # Find Max/Min magnitude values and their indices
+        max_mag = 0
+        max_idx_relative = 0
+        min_mag = 999999
+        min_idx_relative = 0
+        
+        for i, mag in enumerate(active_mags):
+            if mag > max_mag:
+                max_mag = mag
+                max_idx_relative = i
+            
+            # Only consider "quiet" bins if they are above the noise floor (or zero)
+            if mag < min_mag and mag > 0:
+                min_mag = mag
+                min_idx_relative = i
+
+        # Convert index back to frequency (Hz)
+        hz_per_bin = self.hz_per_bin
+        max_freq = int((max_idx_relative + start_index) * hz_per_bin)
+        min_freq = int((min_idx_relative + start_index) * hz_per_bin)
+
+        # Return (max_freq, max_magnitude, min_freq, min_magnitude)
+        return (max_freq, max_mag, min_freq, min_mag)
 
     def calculate_display_bars(self, magnitudes, min_hz, max_hz, num_bars):
         """Bins FFT data into bars for the display."""
