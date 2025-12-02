@@ -51,8 +51,10 @@ def main():
         disp.show_message("5s Band Monitor", "Collecting Data...")
 
     def finalize_band_monitor(current_time):
-        """Processes collected data and sets final results.
-        CRITICAL FIX: Updates OLED display when finalized, regardless of output_mode.
+        """
+        Processes collected data and sets final results.
+        CRITICAL FIX: Removed OLED drawing from here. Data is updated, and 
+        the main loop handles drawing based on output_mode.
         """
         global band_monitor_data, band_monitor_is_collecting
         
@@ -70,16 +72,16 @@ def main():
             final_max_mag = max_mag_entry[1]
 
             # Find the overall min magnitude and its corresponding frequency
-            # Note: We look for the entry with the *lowest* min_mag (item[2])
             min_mag_entry = min(band_data_collection, key=lambda item: item[2])
             final_min_freq = min_mag_entry[3] 
             final_min_mag = min_mag_entry[2]
             
+            # Update global result for both OLED and Web access
             band_monitor_data = (final_max_freq, final_max_mag, final_min_freq, final_min_mag)
         
-        # Display the static result immediately on OLED (Fix for Web Mode issue)
-        max_f, max_m, min_f, min_m = band_monitor_data
-        disp.draw_band_monitor(max_f, max_m, min_f, min_m)
+        # Display "Results Ready" briefly, then loop logic takes over
+        disp.show_message("5s Band Monitor", "Results Ready!")
+        time.sleep_ms(500)
         
     def cycle_vis_mode():
         """Short Press: Cycles visualization type."""
@@ -211,8 +213,9 @@ def main():
                         remaining_s = (BAND_MONITOR_PERIOD_MS - elapsed) // 1000
                         disp.show_message("COLLECTING", f"{remaining_s}s remaining...")
                     else:
-                        # Display final result (already drawn by finalize_band_monitor)
-                        pass 
+                        # Display final result (Final result already calculated and stored in band_monitor_data)
+                        max_f, max_m, min_f, min_m = band_monitor_data
+                        disp.draw_band_monitor(max_f, max_m, min_f, min_m)
                 
                 elif vis_mode == 3: # dB Meter
                     db = audio.calculate_db(raw)
@@ -232,8 +235,13 @@ def main():
                         # Collect data point for this frame
                         band_data_point = audio.analyze_bands(mags)
                         band_data_collection.append(band_data_point)
-                    # The OLED update happens in finalize_band_monitor when collection ends.
+                    # Data is processed in finalize_band_monitor, making it available for JSON
                     latest_mags = []
+                    
+                    # CRITICAL FIX: Ensure the OLED shows the WEB ACTIVE message when static
+                    if not band_monitor_is_collecting:
+                        disp.show_message("WEB MODE ACTIVE", net.ip_address)
+                    
                 elif vis_mode == 3: # dB Meter
                     db = audio.calculate_db(raw)
                     if db > db_max: db_max = db
