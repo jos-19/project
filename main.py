@@ -48,18 +48,18 @@ def main():
         band_data_collection = []
         band_monitor_start_time = time.ticks_ms()
         band_monitor_is_collecting = True
+        # Set collecting message on OLED
         disp.show_message("5s Band Monitor", "Collecting Data...")
 
     def finalize_band_monitor(current_time):
         """
         Processes collected data and sets final results.
-        CRITICAL FIX: Removed OLED drawing from here. Data is updated, and 
-        the main loop handles drawing based on output_mode.
+        CRITICAL FIX: Removed all time.sleep/disp.show_message calls.
+        Only process data and update state variables.
         """
         global band_monitor_data, band_monitor_is_collecting
         
         band_monitor_is_collecting = False
-        disp.show_message("5s Band Monitor", "Processing...")
         
         if not band_data_collection:
             band_monitor_data = (0, 0, 0, 0)
@@ -79,9 +79,7 @@ def main():
             # Update global result for both OLED and Web access
             band_monitor_data = (final_max_freq, final_max_mag, final_min_freq, final_min_mag)
         
-        # Display "Results Ready" briefly, then loop logic takes over
-        disp.show_message("5s Band Monitor", "Results Ready!")
-        time.sleep_ms(500)
+        # OLED status update handled by main loop on next iteration.
         
     def cycle_vis_mode():
         """Short Press: Cycles visualization type."""
@@ -239,6 +237,7 @@ def main():
                     latest_mags = []
                     
                     # CRITICAL FIX: Ensure the OLED shows the WEB ACTIVE message when static
+                    # This handles the transition immediately after finalize_band_monitor
                     if not band_monitor_is_collecting:
                         disp.show_message("WEB MODE ACTIVE", net.ip_address)
                     
