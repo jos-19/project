@@ -1,4 +1,3 @@
-Poster SIZE A3 at least
 
 ## Audio spectrum analyzer
 
