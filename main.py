@@ -23,7 +23,7 @@ band_monitor_data = (0, 0, 0, 0) # (max_freq, max_mag, min_freq, min_mag)
 
 # --- BAND MONITOR STATE ---
 BAND_MONITOR_PERIOD_MS = 5000 # 5 seconds
-band_data_collection = [] # Stores (max_freq, max_mag, min_mag) per frame
+band_data_collection = [] # Stores (max_freq, max_mag, min_mag, min_freq) per frame
 band_monitor_start_time = 0
 band_monitor_is_collecting = False
 
@@ -51,7 +51,9 @@ def main():
         disp.show_message("5s Band Monitor", "Collecting Data...")
 
     def finalize_band_monitor(current_time):
-        """Processes collected data and sets final results."""
+        """Processes collected data and sets final results.
+        CRITICAL FIX: Updates OLED display when finalized, regardless of output_mode.
+        """
         global band_monitor_data, band_monitor_is_collecting
         
         band_monitor_is_collecting = False
@@ -60,7 +62,7 @@ def main():
         if not band_data_collection:
             band_monitor_data = (0, 0, 0, 0)
         else:
-            # max_freq index: 0, max_mag index: 1, min_mag index: 2
+            # max_freq index: 0, max_mag index: 1, min_mag index: 2, min_freq index: 3
             
             # Find the overall max magnitude and its corresponding frequency
             max_mag_entry = max(band_data_collection, key=lambda item: item[1])
@@ -70,12 +72,14 @@ def main():
             # Find the overall min magnitude and its corresponding frequency
             # Note: We look for the entry with the *lowest* min_mag (item[2])
             min_mag_entry = min(band_data_collection, key=lambda item: item[2])
-            final_min_freq = min_mag_entry[3] # Index 3 stores min_freq
+            final_min_freq = min_mag_entry[3] 
             final_min_mag = min_mag_entry[2]
             
             band_monitor_data = (final_max_freq, final_max_mag, final_min_freq, final_min_mag)
         
-        # Display/Web will now show the final static result
+        # Display the static result immediately on OLED (Fix for Web Mode issue)
+        max_f, max_m, min_f, min_m = band_monitor_data
+        disp.draw_band_monitor(max_f, max_m, min_f, min_m)
         
     def cycle_vis_mode():
         """Short Press: Cycles visualization type."""
@@ -95,13 +99,13 @@ def main():
         # Start new collection if entering Band Monitor mode
         if vis_mode == 2:
             start_band_monitor()
-            
-        # Show feedback briefly
-        disp.show_message(VIS_MODE_NAMES[vis_mode], "Mode Selected")
-        time.sleep(0.5)
-        # If in Web Mode, restore the Web info screen
-        if output_mode == 1 and vis_mode != 2: # Don't overwrite collecting message
-            disp.show_message("WEB MODE ACTIVE", net.ip_address)
+        else:
+            # Show feedback briefly for non-Band modes
+            disp.show_message(VIS_MODE_NAMES[vis_mode], "Mode Selected")
+            time.sleep(0.5)
+            # If in Web Mode, restore the Web info screen
+            if output_mode == 1:
+                disp.show_message("WEB MODE ACTIVE", net.ip_address)
 
     def toggle_output_mode():
         """Long Press: Toggles between OLED and Web priority."""
@@ -117,13 +121,12 @@ def main():
             disp.show_message("WEB MODE ACTIVE", net.ip_address)
         
         time.sleep(1.0)
-        # Restart collection if web mode is enabled and vis_mode is 2
+        # Restart collection if web mode is enabled AND we are in vis_mode 2
         if output_mode == 1 and vis_mode == 2:
             start_band_monitor()
 
     def get_json_data():
         """Generates JSON for the web client."""
-        # ... (JSON generation remains the same)
         min_hz = 0
         max_hz = 0
         
@@ -149,7 +152,7 @@ def main():
             f'"bandMaxMag":"{max_mag:.0f}"',
             f'"bandMinFreq":"{min_freq}"',
             f'"bandMinMag":"{min_mag:.0f}"',
-            f'"bandStatus":"{"COLLECTING" if band_monitor_is_collecting else "STATIC"}"' # NEW Status
+            f'"bandStatus":"{"COLLECTING" if band_monitor_is_collecting else "STATIC"}"'
         ]
         
         mag_str = ','.join([f"{m:.0f}" for m in latest_mags])
@@ -208,9 +211,8 @@ def main():
                         remaining_s = (BAND_MONITOR_PERIOD_MS - elapsed) // 1000
                         disp.show_message("COLLECTING", f"{remaining_s}s remaining...")
                     else:
-                        # Display final result
-                        max_f, max_m, min_f, min_m = band_monitor_data
-                        disp.draw_band_monitor(max_f, max_m, min_f, min_m)
+                        # Display final result (already drawn by finalize_band_monitor)
+                        pass 
                 
                 elif vis_mode == 3: # dB Meter
                     db = audio.calculate_db(raw)
@@ -230,7 +232,7 @@ def main():
                         # Collect data point for this frame
                         band_data_point = audio.analyze_bands(mags)
                         band_data_collection.append(band_data_point)
-                    # When finalized, band_monitor_data is already updated
+                    # The OLED update happens in finalize_band_monitor when collection ends.
                     latest_mags = []
                 elif vis_mode == 3: # dB Meter
                     db = audio.calculate_db(raw)
