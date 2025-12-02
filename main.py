@@ -5,251 +5,181 @@ from audio_processor import AudioProcessor
 from display_manager import DisplayManager
 from network_manager import NetworkManager
 
-# --- Global State ---
-# vis_mode: 0=Speech, 1=Wide, 2=Band Monitor (5s), 3=dB Meter
-vis_mode = 0 
-VIS_MODE_NAMES = ["Speech", "Wide", "5s Bands", "dB Meter"]
-
-# output_mode: 0=OLED Priority (Fast), 1=Web Priority (WiFi On)
-output_mode = 0 
-OUTPUT_NAMES = ["OLED Priority", "Web Priority"]
+# Global State
+current_mode = 0
+MODE_NAMES = ["Speech", "Wide", "Analyzer", "dB Meter"]
 
 # Data containers for Web JSON
 latest_mags = []
 latest_db_val = 0.0
 db_min = 999
 db_max = -999
-band_monitor_data = (0, 0, 0, 0) # (max_freq, max_mag, min_freq, min_mag)
+latest_report_text = ""
 
-# --- BAND MONITOR STATE ---
-BAND_MONITOR_PERIOD_MS = 5000 # 5 seconds
-band_data_collection = [] # Stores (max_freq, max_mag, min_mag, min_freq) per frame
-band_monitor_start_time = 0
-band_monitor_is_collecting = False
+# Analyzer state
+analysis_start = 0
+analysis_accum = []
+analysis_count = 0
+analysis_done = False
 
 def main():
-    global vis_mode, output_mode, latest_mags, latest_db_val, db_min, db_max, band_monitor_data
-    global band_monitor_start_time, band_data_collection, band_monitor_is_collecting
-    
+    global current_mode, latest_mags, latest_db_val, db_min, db_max
+    global analysis_start, analysis_accum, analysis_count, analysis_done, latest_report_text
+
     # 1. Initialize Modules
     btn = machine.Pin(config.BUTTON_PIN, machine.Pin.IN, machine.Pin.PULL_UP)
     disp = DisplayManager()
     audio = AudioProcessor()
     net = NetworkManager(disp)
-    
-    # 2. Connect Network (Initial setup)
+
+    # 2. Connect Network
     net.connect()
-    
+
     # 3. Helper Functions
-    
-    def start_band_monitor():
-        """Starts the 5s data collection."""
-        global band_monitor_start_time, band_data_collection, band_monitor_is_collecting
-        band_data_collection = []
-        band_monitor_start_time = time.ticks_ms()
-        band_monitor_is_collecting = True
-        # Set collecting message on OLED
-        disp.show_message("5s Band Monitor", "Collecting Data...")
+    def cycle_mode():
+        global current_mode, db_min, db_max
+        global analysis_start, analysis_done, latest_report_text
 
-    def finalize_band_monitor(current_time):
-        """
-        Processes collected data and sets final results.
-        CRITICAL FIX: Removed all time.sleep/disp.show_message calls.
-        Only process data and update state variables.
-        """
-        global band_monitor_data, band_monitor_is_collecting
-        
-        band_monitor_is_collecting = False
-        
-        if not band_data_collection:
-            band_monitor_data = (0, 0, 0, 0)
-        else:
-            # max_freq index: 0, max_mag index: 1, min_mag index: 2, min_freq index: 3
-            
-            # Find the overall max magnitude and its corresponding frequency
-            max_mag_entry = max(band_data_collection, key=lambda item: item[1])
-            final_max_freq = max_mag_entry[0]
-            final_max_mag = max_mag_entry[1]
-
-            # Find the overall min magnitude and its corresponding frequency
-            min_mag_entry = min(band_data_collection, key=lambda item: item[2])
-            final_min_freq = min_mag_entry[3] 
-            final_min_mag = min_mag_entry[2]
-            
-            # Update global result for both OLED and Web access
-            band_monitor_data = (final_max_freq, final_max_mag, final_min_freq, final_min_mag)
-        
-        # OLED status update handled by main loop on next iteration.
-        
-    def cycle_vis_mode():
-        """Short Press: Cycles visualization type."""
-        global vis_mode, db_min, db_max, band_monitor_is_collecting
-        
-        # Stop collection if running
-        band_monitor_is_collecting = False
-        
-        # Cycle through 4 modes
-        vis_mode = (vis_mode + 1) % 4
-        
-        # Reset DB stats if entering dB mode
-        if vis_mode == 3: # Mode 3 is now dB Meter
-            db_min = 999
-            db_max = -999
-            
-        # Start new collection if entering Band Monitor mode
-        if vis_mode == 2:
-            start_band_monitor()
-        else:
-            # Show feedback briefly for non-Band modes
-            disp.show_message(VIS_MODE_NAMES[vis_mode], "Mode Selected")
-            time.sleep(0.5)
-            # If in Web Mode, restore the Web info screen
-            if output_mode == 1:
-                disp.show_message("WEB MODE ACTIVE", net.ip_address)
-
-    def toggle_output_mode():
-        """Long Press: Toggles between OLED and Web priority."""
-        global output_mode, band_monitor_is_collecting
-        output_mode = (output_mode + 1) % 2
-        
-        # Reset Band Monitor state on output mode change
-        band_monitor_is_collecting = False
-        
-        if output_mode == 0:
-            disp.show_message("OLED MODE", "WiFi Paused")
-        else:
-            disp.show_message("WEB MODE ACTIVE", net.ip_address)
-        
-        time.sleep(1.0)
-        # Restart collection if web mode is enabled AND we are in vis_mode 2
-        if output_mode == 1 and vis_mode == 2:
-            start_band_monitor()
+        current_mode = (current_mode + 1) % 4  # now 4 modes
+        # Reset stats on mode switch
+        db_min = 999
+        db_max = -999
+        analysis_start = 0
+        analysis_done = False
+        latest_report_text = ""
+        disp.show_message("Switching to", MODE_NAMES[current_mode])
+        time.sleep(0.5)
 
     def get_json_data():
-        """Generates JSON for the web client."""
-        min_hz = 0
-        max_hz = 0
-        
-        if vis_mode == 0: # Speech
-            min_hz = 100
-            max_hz = 1000
-        elif vis_mode == 1: # Wide
-            min_hz = 0
-            max_hz = int(audio.max_freq)
-        
-        max_freq, max_mag, min_freq, min_mag = band_monitor_data
-        
-        parts = [
-            f'"modeName":"{VIS_MODE_NAMES[vis_mode]}"',
-            f'"minHz":"{min_hz}"',
-            f'"maxHz":"{max_hz}"',
-            # DB Data
-            f'"dbValue":"{latest_db_val:.1f}"',
-            f'"dbMin":"{db_min:.0f}"',
-            f'"dbMax":"{db_max:.0f}"',
-            # Band Data
-            f'"bandMaxFreq":"{max_freq}"',
-            f'"bandMaxMag":"{max_mag:.0f}"',
-            f'"bandMinFreq":"{min_freq}"',
-            f'"bandMinMag":"{min_mag:.0f}"',
-            f'"bandStatus":"{"COLLECTING" if band_monitor_is_collecting else "STATIC"}"'
-        ]
-        
-        mag_str = ','.join([f"{m:.0f}" for m in latest_mags])
-        parts.append(f'"magnitudes":[{mag_str}]')
-        
-        return '{' + ','.join(parts) + '}'
+        """Generates the JSON string for the web app."""
+        min_hz_val = 0
+        max_hz_val = 0
 
-    print("System Running. Hold button 1s to switch Output Mode.")
-    disp.show_message("Ready!", "Hold Btn: Web/OLED")
-    time.sleep(1)
+        # Determine frequency range based on mode
+        if current_mode == 0:
+            min_hz_val = 100
+            max_hz_val = 1000
+        elif current_mode == 1:
+            min_hz_val = 0
+            max_hz_val = int(audio.max_freq)
+
+        # Build JSON parts
+        json_parts = []
+        json_parts.append(f'"modeName":"{MODE_NAMES[current_mode]}"')
+        json_parts.append(f'"minHz":"{min_hz_val}"')
+        json_parts.append(f'"maxHz":"{max_hz_val}"')
+
+        # Add report text (used for Analyzer mode)
+        json_parts.append(f'"reportText":"{latest_report_text}"')
+
+        # DB Data
+        json_parts.append(f'"dbValue":"{latest_db_val:.1f}"')
+        json_parts.append(f'"dbMin":"{db_min:.0f}"')
+        json_parts.append(f'"dbMax":"{db_max:.0f}"')
+
+        # Spectrum Data
+        mag_str = ','.join([f"{m:.0f}" for m in latest_mags])
+        json_parts.append(f'"magnitudes":[{mag_str}]')
+
+        return '{' + ','.join(json_parts) + '}'
+
+    print("System Running...")
 
     # 4. Main Loop
     while True:
         try:
-            current_time = time.ticks_ms()
-            
-            # --- INPUT HANDLING (Short vs Long Press) ---
+            # Check Button
             if btn.value() == 0:
-                press_start = current_time
+                cycle_mode()
                 while btn.value() == 0:
-                    time.sleep(0.05)
-                
-                press_duration = time.ticks_diff(time.ticks_ms(), press_start)
-                
-                if press_duration > 800: # Long Press (> 0.8s)
-                    toggle_output_mode()
-                else: # Short Press
-                    cycle_vis_mode()
-                    
-            # --- BAND MONITOR TIMEOUT CHECK (Runs in both Output Modes) ---
-            if band_monitor_is_collecting and time.ticks_diff(current_time, band_monitor_start_time) >= BAND_MONITOR_PERIOD_MS:
-                finalize_band_monitor(current_time)
+                    time.sleep(0.01)  # Debounce
 
-            # --- AUDIO READING ---
+            # Check Web
+            net.handle_request(get_json_data, cycle_mode)
+
+            # Audio Processing
             raw = audio.read_audio()
-            mags = audio.get_magnitudes(raw) 
 
-            # --- MODE 0: OLED PRIORITY (Max Speed) ---
-            if output_mode == 0:
-                if vis_mode == 0:   # Speech
-                    bar_mags = audio.calculate_display_bars(mags, 100, 1000, config.SPEECH_BARS)
-                    disp.draw_spectrum(bar_mags, 100, 1000, "Speech Mode")
-                
-                elif vis_mode == 1: # Wide
-                    bar_mags = audio.calculate_display_bars(mags, 0, audio.max_freq, config.OLED_WIDTH)
-                    disp.draw_spectrum(bar_mags, 0, audio.max_freq, "Wide Range")
-                
-                elif vis_mode == 2: # Band Monitor (5s)
-                    if band_monitor_is_collecting:
-                        # Collect data point for this frame
-                        band_data_point = audio.analyze_bands(mags)
-                        band_data_collection.append(band_data_point)
-                        
-                        # Show time remaining on screen
-                        elapsed = time.ticks_diff(current_time, band_monitor_start_time)
-                        remaining_s = (BAND_MONITOR_PERIOD_MS - elapsed) // 1000
-                        disp.show_message("COLLECTING", f"{remaining_s}s remaining...")
+            if current_mode == 0:  # Speech Mode
+                mags = audio.get_magnitudes(raw)
+                bar_mags = audio.calculate_display_bars(mags, 100, 1000, config.SPEECH_BARS)
+                latest_mags = bar_mags
+                latest_report_text = ""
+                disp.draw_spectrum(bar_mags, 100, 1000, "Speech Mode")
+
+            elif current_mode == 1:  # Wide Mode
+                mags = audio.get_magnitudes(raw)
+                bar_mags = audio.calculate_display_bars(mags, 0, audio.max_freq, config.OLED_WIDTH)
+                latest_mags = bar_mags
+                latest_report_text = ""
+                disp.draw_spectrum(bar_mags, 0, audio.max_freq, "Wide Range")
+
+            elif current_mode == 2:  # Analyzer (most/least occupied)
+                mags = audio.get_magnitudes(raw)
+
+                # Start accumulation
+                if analysis_start == 0:
+                    analysis_start = time.time()
+                    analysis_accum = [0] * len(mags)
+                    analysis_count = 0
+                    analysis_done = False
+
+                if not analysis_done:
+                    elapsed = time.time() - analysis_start
+
+                    if elapsed < 5:
+                        # Accumulate data
+                        for i in range(len(mags)):
+                            analysis_accum[i] += mags[i]
+                        analysis_count += 1
+
+                        # Update display with countdown
+                        disp.show_message("Measuring...", f"Time: {5 - int(elapsed)}s")
+                        latest_report_text = f"Measuring...|Time: {5 - int(elapsed)}s| "
                     else:
-                        # Display final result (Final result already calculated and stored in band_monitor_data)
-                        max_f, max_m, min_f, min_m = band_monitor_data
-                        disp.draw_band_monitor(max_f, max_m, min_f, min_m)
-                
-                elif vis_mode == 3: # dB Meter
-                    db = audio.calculate_db(raw)
-                    if db > db_max: db_max = db
-                    if db < db_min: db_min = db
-                    disp.draw_db_meter(db, db_min, db_max)
-                
-            # --- MODE 1: WEB PRIORITY (WiFi Enabled) ---
-            else:
-                # 1. Process Data (Just for JSON, no drawing)
-                if vis_mode == 0: # Speech
-                    latest_mags = audio.calculate_display_bars(mags, 100, 1000, config.SPEECH_BARS)
-                elif vis_mode == 1: # Wide
-                    latest_mags = audio.calculate_display_bars(mags, 0, audio.max_freq, config.OLED_WIDTH)
-                elif vis_mode == 2: # Band Monitor (5s)
-                    if band_monitor_is_collecting:
-                        # Collect data point for this frame
-                        band_data_point = audio.analyze_bands(mags)
-                        band_data_collection.append(band_data_point)
-                    # Data is processed in finalize_band_monitor, making it available for JSON
-                    latest_mags = []
-                    
-                    # CRITICAL FIX: Ensure the OLED shows the WEB ACTIVE message when static
-                    # This handles the transition immediately after finalize_band_monitor
-                    if not band_monitor_is_collecting:
-                        disp.show_message("WEB MODE ACTIVE", net.ip_address)
-                    
-                elif vis_mode == 3: # dB Meter
-                    db = audio.calculate_db(raw)
-                    if db > db_max: db_max = db
-                    if db < db_min: db_min = db
-                    latest_db_val = db
-                    latest_mags = []
+                        # Process results
+                        analysis_done = True
+                        if analysis_count == 0:
+                            continue
 
-                # 2. Handle Network (Every loop for responsiveness)
-                net.handle_request(get_json_data, cycle_vis_mode)
+                        avgs = [x / analysis_count for x in analysis_accum]
+                        valid_data = avgs[config.IGNORE_LOW_BINS:]
+
+                        if not valid_data:
+                            continue
+
+                        max_val = max(valid_data)
+                        max_idx = valid_data.index(max_val) + config.IGNORE_LOW_BINS
+                        max_hz = max_idx * audio.hz_per_bin
+
+                        min_val = min(valid_data)
+                        min_idx = valid_data.index(min_val) + config.IGNORE_LOW_BINS
+                        min_hz = min_idx * audio.hz_per_bin
+
+                        overall_avg = sum(valid_data) / len(valid_data)
+
+                        # Display result on OLED
+                        disp.oled.fill(0)
+                        disp.oled.text("--- REPORT ---", 10, 0)
+                        disp.oled.text(f"Max: {int(max_hz)} Hz", 0, 15)
+                        disp.oled.text(f"Min: {int(min_hz)} Hz", 0, 30)
+                        disp.oled.text(f"Avg: {int(overall_avg)}", 0, 45)
+                        disp.oled.show()
+
+                        # For web UI
+                        latest_report_text = f"Max: {int(max_hz)} Hz|Min: {int(min_hz)} Hz|Avg: {int(overall_avg)}"
+                        latest_mags = []  # clear bars since it's text-only
+
+            elif current_mode == 3:  # dB Meter
+                db = audio.calculate_db(raw)
+                if db > db_max:
+                    db_max = db
+                if db < db_min:
+                    db_min = db
+                latest_db_val = db
+                latest_mags = []
+                latest_report_text = ""
+                disp.draw_db_meter(db, db_min, db_max)
 
         except Exception as e:
             print(f"Error: {e}")
