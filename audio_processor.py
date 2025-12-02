@@ -6,10 +6,24 @@ import config
 
 class AudioProcessor:
     """
-    Handles analog input reading, FFT processing, and dB calculations.
+    The core engine for audio signal processing.
+    
+    This class handles the interface with the ESP32 ADC (Analog-to-Digital Converter),
+    performs signal normalization, manages the Fast Fourier Transform (FFT) via the
+    helper module, and calculates derived metrics like Decibels (dB).
+
+    Attributes:
+        adc (machine.ADC): The configured ADC object on the microphone pin.
+        real_sampling_rate (int): The actual sampling rate calculated during initialization (approx 10-20kHz).
+        hz_per_bin (float): The frequency resolution of each FFT bin (Sampling Rate / Sample Length).
+        max_freq (float): The Nyquist frequency (Sampling Rate / 2).
     """
 
     def __init__(self):
+        """
+        Initializes the ADC, configures attenuation for 3.3V logic, and performs
+        a calibration step to determine the actual sampling rate of the Python loop.
+        """
         # Initialize ADC
         self.adc = machine.ADC(machine.Pin(config.MIC_PIN))
         self.adc.width(machine.ADC.WIDTH_12BIT)
@@ -23,16 +37,42 @@ class AudioProcessor:
         print(f"Audio Init: {self.real_sampling_rate}Hz | Res: {self.hz_per_bin:.1f}Hz")
 
     def read_audio(self):
-        """Reads raw samples from ADC."""
+        """
+        Reads a full buffer of raw audio samples from the microphone.
+
+        This method blocks execution until `config.SAMPLE_LENGTH` samples are collected.
+        
+        :return: A list of integers (0-4095) representing raw voltage levels.
+        :rtype: list[int]
+        """
         read_func = self.adc.read
         return [read_func() for _ in range(config.SAMPLE_LENGTH)]
 
     def get_magnitudes(self, raw_data):
-        """Calculates FFT magnitudes."""
+        """
+        Converts time-domain raw audio data into frequency-domain magnitudes.
+
+        This acts as a wrapper for the external `fft` module.
+
+        :param list[int] raw_data: The list of raw ADC values collected by `read_audio`.
+        :return: A list of floats representing the magnitude of specific frequency bins.
+        :rtype: list[float]
+        """
         return fft.get_magnitude(raw_data)
 
     def calculate_db(self, raw_data):
-        """Calculates RMS Decibels."""
+        """
+        Calculates the Root Mean Square (RMS) amplitude and converts it to Decibels (dB).
+
+        The formula used is:
+        
+        .. math::
+            dB = 20 \\cdot \\log_{10}(\\frac{RMS}{Reference}) + Offset
+
+        :param list[int] raw_data: The raw audio samples.
+        :return: The calculated loudness in dB (clamped to 0.0 minimum).
+        :rtype: float
+        """
         if not raw_data: return 0
         avg = sum(raw_data) / len(raw_data)
         centered = [x - avg for x in raw_data]
@@ -45,11 +85,17 @@ class AudioProcessor:
             return max(0, db)
         return 0.0
 
-    # --- RESTORED LOGIC FROM OLD CODE ---
     def calculate_analyzer_stats(self, accumulated_mags, count):
         """
-        Takes the accumulated magnitudes and the count of frames.
-        Returns (max_hz, min_hz, overall_avg)
+        Computes statistical data for the 'Analyzer' mode over a duration of time.
+
+        It averages the accumulated magnitudes, ignores low-frequency noise (DC offset),
+        and finds the frequency bin with the highest energy.
+
+        :param list[float] accumulated_mags: Sum of magnitudes per bin over N frames.
+        :param int count: The number of frames accumulated.
+        :return: A tuple containing (Max Frequency Hz, Min Frequency Hz, Average Magnitude).
+        :rtype: tuple(float, float, float)
         """
         if count == 0: return (0, 0, 0)
         
@@ -77,7 +123,20 @@ class AudioProcessor:
         return (max_hz, min_hz, overall_avg)
 
     def calculate_display_bars(self, magnitudes, min_hz, max_hz, num_bars):
-        """Bins FFT data into bars for the display."""
+        """
+        Bins high-resolution FFT data into a lower number of bars for display.
+
+        This function maps a wide frequency range (e.g., 0-10kHz) into a small number 
+        of screen pixels (e.g., 20 bars or 128 pixels). It groups FFT bins and takes 
+        the maximum value within that group.
+
+        :param list[float] magnitudes: The full resolution FFT data.
+        :param float min_hz: The starting frequency of the view.
+        :param float max_hz: The ending frequency of the view.
+        :param int num_bars: The target number of bars to generate.
+        :return: A list of bar heights ready for drawing.
+        :rtype: list[float]
+        """
         start_idx = int(min_hz / self.hz_per_bin)
         end_idx  = int(max_hz / self.hz_per_bin)
         
@@ -106,7 +165,14 @@ class AudioProcessor:
         return display_bars
 
     def _measure_sampling_rate(self):
-        """Internal calibration."""
+        """
+        Internal calibration method.
+        
+        Measures the time it takes to read one full buffer to calculate the 
+        effective sampling rate in Hz. This accounts for MicroPython overhead.
+        
+        :return: The calculated sampling rate in Hz.
+        """
         self.read_audio()
         start = time.ticks_us()
         self.read_audio()
