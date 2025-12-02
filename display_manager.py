@@ -52,6 +52,27 @@ class DisplayManager:
         self.oled.text(self._format_freq(max_hz), 90, 56)
         self.oled.show()
 
+    # --- NEW FUNCTION FOR BAND MONITOR MODE ---
+    def draw_band_monitor(self, max_freq, max_mag, min_freq, min_mag):
+        self.oled.fill(0)
+        self.oled.text("Band Monitor", 20, 0)
+        
+        # Max Band (Line 1 & 2)
+        self.oled.text("Max:", 0, 15)
+        self.oled.text(f"{self._format_freq(max_freq)} @ {max_mag:.0f}", 40, 15)
+        
+        # Min Band (Line 3 & 4)
+        self.oled.text("Min:", 0, 30)
+        self.oled.text(f"{self._format_freq(min_freq)} @ {min_mag:.0f}", 40, 30)
+        
+        # Visual Bar (Max Magnitude)
+        self.oled.text("Peak Level:", 0, 45)
+        bar_w = int((max_mag / 3000) * 128) # Max magnitude assumed to be around 3000
+        if bar_w > 128: bar_w = 128
+        self.oled.fill_rect(0, 55, bar_w, 8, 1)
+        
+        self.oled.show()
+
     def draw_db_meter(self, db_val, db_min, db_max):
         self.oled.fill(0)
         self.oled.text("dB Meter", 35, 0)
@@ -65,5 +86,5 @@ class DisplayManager:
         self.oled.show()
 
     def _format_freq(self, hz):
-        if hz >= 1000: return f"{hz/1000:.1f}k"
-        return str(int(hz))
+        if hz >= 1000: return f"{hz/1000:.1f}k Hz"
+        return f"{int(hz)} Hz"
