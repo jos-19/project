@@ -23,12 +23,12 @@ class AudioProcessor:
         print(f"Audio Init: {self.real_sampling_rate}Hz | Res: {self.hz_per_bin:.1f}Hz")
 
     def read_audio(self):
-        """Reads raw samples from ADC."""
-        raw_samples = []
+        """
+        Reads raw samples from ADC.
+        OPTIMIZED: Uses list comprehension for faster memory allocation.
+        """
         read_func = self.adc.read
-        for _ in range(config.SAMPLE_LENGTH):
-            raw_samples.append(read_func())
-        return raw_samples
+        return [read_func() for _ in range(config.SAMPLE_LENGTH)]
 
     def get_magnitudes(self, raw_data):
         """Calculates FFT magnitudes."""
