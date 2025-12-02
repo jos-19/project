@@ -1,3 +1,27 @@
+"""
+Main Controller Module
+======================
+
+This is the entry point of the ESP32 Spectrum Analyzer firmware. 
+It coordinates the audio processing, display rendering, and network communications 
+in a central infinite loop.
+
+Key Responsibilities:
+---------------------
+* **State Management:** Holds global state for visualization modes and data accumulation.
+* **Input Handling:** Monitors the physical button for mode switching (short press) and output toggling (long press).
+* **Loop Execution:** Orchestrates the timing between reading audio, calculating FFTs, and updating the UI.
+
+Global Variables:
+-----------------
+* ``vis_mode`` (int): 0=Speech, 1=Wide, 2=Analyzer, 3=dB Meter.
+* ``output_mode`` (int): 0=OLED Priority (fast framerate), 1=Web Priority (network enabled).
+
+Usage:
+------
+Flash this file as ``main.py`` to the microcontroller. It will execute automatically on boot.
+"""
+
 import machine
 import time
 import config
