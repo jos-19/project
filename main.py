@@ -70,6 +70,8 @@ def main():
 
     print("System Running...")
     
+    frame_count = 0  # Counter for throttling network checks
+    
     # 4. Main Loop
     while True:
         try:
@@ -78,8 +80,12 @@ def main():
                 cycle_mode()
                 while btn.value() == 0: time.sleep(0.01) # Debounce
                 
-            # Check Web
-            net.handle_request(get_json_data, cycle_mode)
+            # --- OPTIMIZATION: Throttle Network ---
+            # Only check for web requests every 5 frames.
+            # This prevents the web server from slowing down the audio visualizer.
+            frame_count += 1
+            if frame_count % 5 == 0:
+                net.handle_request(get_json_data, cycle_mode)
             
             # Audio Processing
             raw = audio.read_audio()
