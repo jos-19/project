@@ -165,14 +165,38 @@ HTML_PAGE = """
 """
 
 class NetworkManager:
-    """Handles Wi-Fi and Web Server."""
+    """
+    Handles Wi-Fi connectivity and the HTTP Server.
+
+    This class manages the connection to the Access Point and serves a 
+    Single Page Application (SPA) to connected clients. It processes AJAX 
+    requests to update the web visualization in real-time.
+    
+    Attributes:
+        wlan (network.WLAN): The WiFi interface object.
+        server_socket (socket): The listening HTTP socket.
+        ip_address (str): The assigned IP address of the ESP32.
+        display (DisplayManager): Reference to the display to show connection status.
+    """
+    
     def __init__(self, display_ref):
+        """
+        :param DisplayManager display_ref: Used to print IP addresses to the OLED.
+        """
         self.wlan = network.WLAN(network.STA_IF)
         self.server_socket = None
         self.ip_address = "N/A"
         self.display = display_ref 
 
     def connect(self):
+        """
+        Attempts to connect to the WiFi network defined in ``config.py``.
+
+        It will retry for approximately 10 seconds.
+        
+        :return: ``True`` if connected successfully, ``False`` otherwise.
+        :rtype: bool
+        """
         self.display.show_message("Connecting WiFi", "Please wait...")
         self.wlan.active(True)
         self.wlan.connect(config.WIFI_SSID, config.WIFI_PASSWORD)
@@ -194,6 +218,9 @@ class NetworkManager:
             return False
 
     def _start_server(self):
+        """
+        Configures the non-blocking socket server on port 80.
+        """
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.server_socket.bind(('', 80))
@@ -201,6 +228,20 @@ class NetworkManager:
         self.server_socket.setblocking(False) 
 
     def handle_request(self, data_json_func, cycle_mode_func):
+        """
+        Checks for incoming HTTP requests and routes them.
+
+        This method is non-blocking. If no client is waiting, it returns immediately.
+        
+        **Routing Logic:**
+        
+        * ``/api/switch_mode`` -> triggers ``cycle_mode_func``.
+        * ``/api/data`` -> responds with JSON data from ``data_json_func``.
+        * ``/`` -> serves the static HTML page.
+
+        :param function data_json_func: Callback function that returns the current system state as a JSON string.
+        :param function cycle_mode_func: Callback function to change the visualization mode.
+        """
         if not self.server_socket: return
         try:
             conn, addr = self.server_socket.accept()
