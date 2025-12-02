@@ -103,7 +103,7 @@ def main_loop():
 
 ![PXL_20251127_145709558](https://github.com/user-attachments/assets/2d00860d-604d-4f28-92fd-ef1b7873f49a)
 
-youtube link here
+[Project demonstration video](https://www.youtube.com/watch?v=csI64xCMzFo)
 
 ## Documentation
 **(https://jos-19.github.io/project/)**
