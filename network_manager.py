@@ -4,7 +4,6 @@ import time
 import config
 
 # --- FULL HTML APP ---
-# Updated to handle the Band Monitor Mode and the new status
 HTML_PAGE = """
 <!DOCTYPE html>
 <html>
@@ -17,6 +16,8 @@ HTML_PAGE = """
         .card { background: #1f2937; border-radius: 12px; padding: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); max-width: 400px; margin: 0 auto; position: relative; min-height: 300px;}
         #canvas-container { position: relative; margin: 10px 0; border: 1px solid #374151; border-radius: 4px; overflow: hidden; height: 220px;}
         canvas { display: block; width: 100%; height: 100%; background: #000; }
+        
+        /* Common View Container */
         .mode-view { 
             display: none; 
             flex-direction: column; 
@@ -30,18 +31,14 @@ HTML_PAGE = """
         }
         
         /* dB Meter Styles */
-        #db-view { display: none; }
         .db-main { font-size: 3.5rem; font-weight: bold; color: #facc15; }
         .db-stats { display: flex; gap: 20px; margin-top: 20px; color: #9ca3af; font-size: 1rem; }
         .db-bar-bg { width: 80%; height: 20px; background: #333; margin-top: 20px; border-radius: 10px; overflow: hidden; }
         .db-bar-fill { height: 100%; background: #facc15; width: 0%; transition: width 0.3s; }
         
-        /* Band Monitor Styles */
-        #band-view { display: none; }
-        .band-row { display: flex; justify-content: space-between; width: 90%; margin: 8px 0; padding: 5px; background: #374151; border-radius: 4px;}
-        .band-label { font-weight: bold; color: #10b981; }
-        .band-value { color: #facc15; }
-        #band-status { font-size: 1.2rem; margin-bottom: 10px; font-weight: 500;}
+        /* Analyzer / Report Styles (Restored from Old Code logic) */
+        .stat-line { font-size: 1.4rem; margin: 10px 0; color: #60a5fa; font-weight: bold; }
+        #analyzer-status { font-size: 1.1rem; color: #9ca3af; margin-bottom: 15px; }
 
         .controls { margin-top: 20px; display: flex; justify-content: center; gap: 10px; }
         button { background: #3b82f6; color: white; border: none; padding: 12px 24px; border-radius: 8px; font-size: 1rem; font-weight: bold; cursor: pointer; transition: background 0.2s; }
@@ -59,24 +56,11 @@ HTML_PAGE = """
             <div class="db-stats"><span id="db-min">Min: 0</span><span id="db-max">Max: 0</span></div>
         </div>
         
-        <div id="band-view" class="mode-view">
-            <div id="band-status">Awaiting Data...</div>
-            <div class="band-row">
-                <span class="band-label">Max Frequency:</span>
-                <span class="band-value" id="band-max-freq">N/A</span>
-            </div>
-            <div class="band-row">
-                <span class="band-label">Max Magnitude:</span>
-                <span class="band-value" id="band-max-mag">N/A</span>
-            </div>
-            <div class="band-row">
-                <span class="band-label">Min Frequency:</span>
-                <span class="band-value" id="band-min-freq">N/A</span>
-            </div>
-            <div class="band-row">
-                <span class="band-label">Min Magnitude:</span>
-                <span class="band-value" id="band-min-mag">N/A</span>
-            </div>
+        <div id="analyzer-view" class="mode-view">
+            <div id="analyzer-status">Waiting...</div>
+            <div class="stat-line" id="line1">--</div>
+            <div class="stat-line" id="line2">--</div>
+            <div class="stat-line" id="line3">--</div>
         </div>
         
         <div class="info" id="status">Connecting...</div>
@@ -86,14 +70,14 @@ HTML_PAGE = """
         const canvas = document.getElementById('analyzerCanvas');
         const canvasContainer = document.getElementById('canvas-container');
         const dbView = document.getElementById('db-view');
-        const bandView = document.getElementById('band-view');
+        const analyzerView = document.getElementById('analyzer-view');
         const ctx = canvas.getContext('2d');
         const FIXED_MAX_MAG = 3000; 
 
         // Helper to format Hz values
         function formatFreq(hz) {
-            if (hz >= 1000) return (hz / 1000).toFixed(1) + 'k Hz';
-            return hz + ' Hz';
+            if (hz >= 1000) return (hz / 1000).toFixed(1) + 'k';
+            return hz;
         }
 
         async function fetchData() {
@@ -102,7 +86,7 @@ HTML_PAGE = """
                 if (!response.ok) throw new Error('Network err');
                 const data = await response.json();
                 updateUI(data);
-                document.getElementById('status').textContent = data.modeName + (data.bandStatus === "COLLECTING" ? " (Collecting)" : "");
+                document.getElementById('status').textContent = data.modeName;
             } catch (error) { document.getElementById('status').textContent = 'Disconnected...'; }
         }
 
@@ -111,12 +95,13 @@ HTML_PAGE = """
         function hideAllViews() {
             canvasContainer.style.display = 'none';
             dbView.style.display = 'none';
-            bandView.style.display = 'none';
+            analyzerView.style.display = 'none';
         }
 
         function updateUI(data) {
             hideAllViews();
             
+            // 1. dB Meter
             if (data.modeName === "dB Meter") {
                 dbView.style.display = 'flex';
                 document.getElementById('db-val').textContent = data.dbValue + " dB";
@@ -127,19 +112,25 @@ HTML_PAGE = """
                 return;
             }
             
-            if (data.modeName === "5s Bands") {
-                bandView.style.display = 'flex';
-                const statusText = data.bandStatus === "COLLECTING" ? "COLLECTING DATA (5s)" : "FINAL RESULTS";
-                document.getElementById('band-status').textContent = statusText;
-
-                document.getElementById('band-max-freq').textContent = formatFreq(parseInt(data.bandMaxFreq));
-                document.getElementById('band-max-mag').textContent = data.bandMaxMag;
-                document.getElementById('band-min-freq').textContent = formatFreq(parseInt(data.bandMinFreq));
-                document.getElementById('band-min-mag').textContent = data.bandMinMag;
+            // 2. Analyzer Mode (Restored)
+            if (data.modeName === "Analyzer") {
+                analyzerView.style.display = 'flex';
+                
+                if (data.analyzerStatus === "COLLECTING") {
+                   document.getElementById('analyzer-status').textContent = "Measuring... " + data.analyzerTime + "s";
+                   document.getElementById('line1').textContent = "Listening...";
+                   document.getElementById('line2').textContent = "";
+                   document.getElementById('line3').textContent = "";
+                } else {
+                   document.getElementById('analyzer-status').textContent = "--- REPORT ---";
+                   document.getElementById('line1').textContent = "Max: " + formatFreq(parseInt(data.anaMax)) + " Hz";
+                   document.getElementById('line2').textContent = "Min: " + formatFreq(parseInt(data.anaMin)) + " Hz";
+                   document.getElementById('line3').textContent = "Avg: " + data.anaAvg;
+                }
                 return;
             }
 
-            // Spectrum Modes (Speech and Wide)
+            // 3. Spectrum Modes
             canvasContainer.style.display = 'block';
             drawSpectrum(data);
         }
@@ -154,12 +145,17 @@ HTML_PAGE = """
                 data.magnitudes.forEach((mag, i) => {
                     let height = (mag / FIXED_MAX_MAG) * graphH;
                     if (height > graphH) height = graphH;
-                    ctx.fillRect(i * barWidth, graphH - height, barWidth - 1, height);
+                    // Draw bar
+                    const x = i * barWidth;
+                    const y = graphH - height;
+                    const gap = barWidth > 5 ? 2 : 0;
+                    ctx.fillRect(x, y, barWidth - gap, height);
                 });
             }
+            // Axis Labels
             ctx.fillStyle = '#9ca3af'; ctx.font = '12px sans-serif';
-            ctx.textAlign = 'left'; ctx.fillText(formatFreq(parseInt(data.minHz)), 5, h - 5);
-            ctx.textAlign = 'right'; ctx.fillText(formatFreq(parseInt(data.maxHz)), w - 5, h - 5);
+            ctx.textAlign = 'left'; ctx.fillText(formatFreq(parseInt(data.minHz)) + " Hz", 5, h - 5);
+            ctx.textAlign = 'right'; ctx.fillText(formatFreq(parseInt(data.maxHz)) + " Hz", w - 5, h - 5);
         }
         
         setInterval(fetchData, 300); 
@@ -177,7 +173,6 @@ class NetworkManager:
         self.display = display_ref 
 
     def connect(self):
-        """Connects to WiFi and prints status to OLED."""
         self.display.show_message("Connecting WiFi", "Please wait...")
         self.wlan.active(True)
         self.wlan.connect(config.WIFI_SSID, config.WIFI_PASSWORD)
