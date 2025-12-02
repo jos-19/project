@@ -45,42 +45,51 @@ class AudioProcessor:
             return max(0, db)
         return 0.0
 
-    # --- NEW FUNCTION FOR BAND MONITOR MODE ---
+    # --- UPDATED FUNCTION FOR BAND MONITOR MODE ---
     def analyze_bands(self, magnitudes):
-        """Finds the most and least active frequency bands."""
+        """
+        Finds the current frame's most and least active frequency bands.
+        Returns: (max_freq, max_magnitude, min_magnitude, min_freq)
+        """
         if not magnitudes: return (0, 0, 0, 0)
 
         # Ignore low bins (DC offset/rumble)
         start_index = config.IGNORE_LOW_BINS
         
-        # Filter magnitudes and get indices relative to the start_index
         active_mags = magnitudes[start_index:]
         
         if not active_mags: return (0, 0, 0, 0)
         
-        # Find Max/Min magnitude values and their indices
         max_mag = 0
         max_idx_relative = 0
-        min_mag = 999999
+        min_mag = 999999 # High starting value
         min_idx_relative = 0
         
         for i, mag in enumerate(active_mags):
+            # Find Max
             if mag > max_mag:
                 max_mag = mag
                 max_idx_relative = i
             
-            # Only consider "quiet" bins if they are above the noise floor (or zero)
-            if mag < min_mag and mag > 0:
+            # Find Min (only consider quiet bands if they are above a minimal floor)
+            if mag < min_mag and mag > config.NOISE_GATE/2: 
                 min_mag = mag
                 min_idx_relative = i
+            # If the noise gate is too high, we might never register a "quiet" band,
+            # so we'll allow zero to be the min if no other quiet signal is found
+            elif mag == 0 and min_mag == 999999: 
+                 min_mag = 0
+                 min_idx_relative = i
+
 
         # Convert index back to frequency (Hz)
         hz_per_bin = self.hz_per_bin
-        max_freq = int((max_idx_relative + start_index) * hz_per_bin)
-        min_freq = int((min_idx_relative + start_index) * hz_per_bin)
-
-        # Return (max_freq, max_magnitude, min_freq, min_magnitude)
-        return (max_freq, max_mag, min_freq, min_mag)
+        final_max_freq = int((max_idx_relative + start_index) * hz_per_bin)
+        final_min_freq = int((min_idx_relative + start_index) * hz_per_bin)
+        
+        # Return (max_freq, max_magnitude, min_magnitude, min_freq)
+        # Note the order is changed to include min_freq at the end
+        return (final_max_freq, max_mag, min_mag, final_min_freq) 
 
     def calculate_display_bars(self, magnitudes, min_hz, max_hz, num_bars):
         """Bins FFT data into bars for the display."""
