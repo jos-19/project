@@ -6,8 +6,6 @@ import config
 
 class AudioProcessor:
     """
-    The core engine for audio signal processing.
-    
     This class handles the interface with the ESP32 ADC (Analog-to-Digital Converter),
     performs signal normalization, manages the Fast Fourier Transform (FFT) via the
     helper module, and calculates derived metrics like Decibels (dB).
@@ -22,7 +20,7 @@ class AudioProcessor:
     def __init__(self):
         """
         Initializes the ADC, configures attenuation for 3.3V logic, and performs
-        a calibration step to determine the actual sampling rate of the Python loop.
+        a calibration step to determine the actual sampling rate.
         """
         # Initialize ADC
         self.adc = machine.ADC(machine.Pin(config.MIC_PIN))
@@ -52,8 +50,6 @@ class AudioProcessor:
         """
         Converts time-domain raw audio data into frequency-domain magnitudes.
 
-        This acts as a wrapper for the external `fft` module.
-
         :param list[int] raw_data: The list of raw ADC values collected by `read_audio`.
         :return: A list of floats representing the magnitude of specific frequency bins.
         :rtype: list[float]
@@ -63,11 +59,6 @@ class AudioProcessor:
     def calculate_db(self, raw_data):
         """
         Calculates the Root Mean Square (RMS) amplitude and converts it to Decibels (dB).
-
-        The formula used is:
-        
-        .. math::
-            dB = 20 \\cdot \\log_{10}(\\frac{RMS}{Reference}) + Offset
 
         :param list[int] raw_data: The raw audio samples.
         :return: The calculated loudness in dB (clamped to 0.0 minimum).
@@ -87,7 +78,7 @@ class AudioProcessor:
 
     def calculate_analyzer_stats(self, accumulated_mags, count):
         """
-        Computes statistical data for the 'Analyzer' mode over a duration of time.
+        Calculates statistical data for the 'Analyzer' mode over a duration of time.
 
         It averages the accumulated magnitudes, ignores low-frequency noise (DC offset),
         and finds the frequency bin with the highest energy.
@@ -124,10 +115,10 @@ class AudioProcessor:
 
     def calculate_display_bars(self, magnitudes, min_hz, max_hz, num_bars):
         """
-        Bins high-resolution FFT data into a lower number of bars for display.
+        Bins FFT data into a lower number of bars for display.
 
-        This function maps a wide frequency range (e.g., 0-10kHz) into a small number 
-        of screen pixels (e.g., 20 bars or 128 pixels). It groups FFT bins and takes 
+        This function maps a  frequency range  into a small number 
+        of screen pixels. It groups FFT bins and takes 
         the maximum value within that group.
 
         :param list[float] magnitudes: The full resolution FFT data.
@@ -169,7 +160,7 @@ class AudioProcessor:
         Internal calibration method.
         
         Measures the time it takes to read one full buffer to calculate the 
-        effective sampling rate in Hz. This accounts for MicroPython overhead.
+        effective sampling rate in Hz. 
         
         :return: The calculated sampling rate in Hz.
         """
