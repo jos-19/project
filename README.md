@@ -19,11 +19,11 @@ Below is the list of components selected for the prototype, including justificat
 
 | Component | Model | Function | Justification |
 | :--- | :--- | :--- | :--- |
-| **MCU** | ESP32 FireBeetle | Main Processing Unit | Dual-core processor capable of handling the heavy math (FFT) required for real-time audio processing. Supports MicroPython and has built-in Wi-Fi/BT. |
+| **MCU** | ESP32 FireBeetle | Main Processing Unit | Dual-core processor capable of handling the heavy math (FFT) required for real-time audio processing. Supports MicroPython and has built-in Wi-Fi. |
 | **Microphone** | MAX4466 | Audio Input | An adjustable gain electret microphone amplifier. It provides an analog output suitable for the ESP32's ADC, essential for capturing raw audio waveforms. |
 | **Display** | SH1106 (OLED) | Visual Output | A 1.3" OLED display using I2C. It is low power, has high contrast for reading charts, and is well-supported by MicroPython drivers. |
 | **Controls** | Push Buttons | User Interface | Simple tactile buttons to switch between display modes (e.g., spectrum view vs. dB stats) or reset min/max values. |
-| **Power** | Li-Po Battery (Optional) | Power Source | To ensure the device is fully portable and handheld. |
+| **Power** | Battery (Optional) | Power Source | To ensure the device is fully portable and handheld. |
 
 ---
 
