@@ -5,7 +5,7 @@ _window_cache = {}
 
 def get_magnitude(data):
     """
-    Calculates FFT magnitudes using optimized pure Python.
+    Calculates FFT magnitudes.
     Non-recursive and uses caching for speed.
     """
     n = len(data)
