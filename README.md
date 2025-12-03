@@ -82,7 +82,7 @@ def main_loop():
         
         # 4. Connectivity Check
         if app_connected:
-            send_data_over_bluetooth(spectrum)
+            send_data_over_wifi(spectrum)
         
         # 5. User Input Check
         if button_pressed:
