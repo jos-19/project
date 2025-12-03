@@ -97,7 +97,7 @@ def main_loop():
 
 * sh1106: Driver for the OLED display.
 
-* socket: For communicating with the mobile app.
+* usocket: For communicating with the mobile app.
 
 # 5. Phase 2
 
