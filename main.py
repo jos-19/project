@@ -2,24 +2,20 @@
 Main Controller Module
 ======================
 
-This is the entry point of the ESP32 Spectrum Analyzer firmware. 
-It coordinates the audio processing, display rendering, and network communications 
-in a central infinite loop.
+This code is used for the audio processing, display, and network communications 
+in a infinite loop.
 
 Key Responsibilities:
 ---------------------
-* **State Management:** Holds global state for visualization modes and data accumulation.
-* **Input Handling:** Monitors the physical button for mode switching (short press) and output toggling (long press).
-* **Loop Execution:** Orchestrates the timing between reading audio, calculating FFTs, and updating the UI.
+* **State Control:** Saves the state for visualization modes and data accumulation.
+* **Input Control:** Monitors the physical button for mode switching (short press) and output toggling (long press).
+* **Loop Execution:** Manages the timing between reading audio, calculating FFTs, and updating the UI.
 
 Global Variables:
 -----------------
 * ``vis_mode`` (int): 0=Speech, 1=Wide, 2=Analyzer, 3=dB Meter.
 * ``output_mode`` (int): 0=OLED Priority (fast framerate), 1=Web Priority (network enabled).
 
-Usage:
-------
-Flash this file as ``main.py`` to the microcontroller. It will execute automatically on boot.
 """
 
 import machine
@@ -37,7 +33,7 @@ VIS_MODE_NAMES = ["Speech", "Wide", "Analyzer", "dB Meter"]
 # output_mode: 0=OLED Priority , 1=Web Priority 
 output_mode = 0 
 
-# Data containers for Web JSON
+# Data containers for the Web 
 latest_mags = []
 latest_db_val = 0.0
 db_min = 999
@@ -124,7 +120,7 @@ def main():
             disp.show_message("WEB MODE ACTIVE", net.ip_address)
         
         time.sleep(1.0)
-        # Restart analyzer if we just switched into it
+        # Restart analyzer
         if vis_mode == 2:
             start_analyzer()
 
@@ -153,7 +149,7 @@ def main():
             f'"modeName":"{VIS_MODE_NAMES[vis_mode]}"',
             f'"minHz":"{min_hz}"',
             f'"maxHz":"{max_hz}"',
-            # DB Data
+            # dB Data
             f'"dbValue":"{latest_db_val:.1f}"',
             f'"dbMin":"{db_min:.0f}"',
             f'"dbMax":"{db_max:.0f}"',
@@ -179,7 +175,7 @@ def main():
         try:
             current_time = time.ticks_ms()
             
-            # --- INPUT HANDLING ---
+            # --- INPUT CONTROL ---
             if btn.value() == 0:
                 press_start = current_time
                 while btn.value() == 0: time.sleep(0.05)
@@ -187,7 +183,7 @@ def main():
                 if press_duration > 800: toggle_output_mode()
                 else: cycle_vis_mode()
                     
-            # --- ANALYZER TIMEOUT ---
+            # --- ANALYZER FINISH ---
             if analyzer_is_collecting:
                 elapsed = time.ticks_diff(current_time, analyzer_start_time)
                 if elapsed >= ANALYZER_DURATION_MS:
@@ -238,7 +234,7 @@ def main():
                     if analyzer_is_collecting:
                         process_analyzer_step(mags)
                     
-                    latest_mags = [] # Don't show bars in analyzer mode
+                    latest_mags = [] # Dont show bars in analyzer mode
                     if not analyzer_is_collecting:
                         disp.show_message("WEB REPORT", "Check Browser")
                     else:
