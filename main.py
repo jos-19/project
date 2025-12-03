@@ -30,11 +30,11 @@ from display_manager import DisplayManager
 from network_manager import NetworkManager
 
 # --- Global State ---
-# vis_mode: 0=Speech, 1=Wide, 2=Analyzer (Restored), 3=dB Meter
+# vis_mode: 0=Speech, 1=Wide, 2=Analyzer, 3=dB Meter
 vis_mode = 0 
 VIS_MODE_NAMES = ["Speech", "Wide", "Analyzer", "dB Meter"]
 
-# output_mode: 0=OLED Priority (Fast), 1=Web Priority (WiFi On)
+# output_mode: 0=OLED Priority , 1=Web Priority 
 output_mode = 0 
 
 # Data containers for Web JSON
@@ -43,7 +43,7 @@ latest_db_val = 0.0
 db_min = 999
 db_max = -999
 
-# --- ANALYZER STATE (Restored) ---
+# --- ANALYZER STATE  ---
 ANALYZER_DURATION_MS = 5000 
 analyzer_accum = []
 analyzer_count = 0
@@ -207,7 +207,7 @@ def main():
                     bar_mags = audio.calculate_display_bars(mags, 0, audio.max_freq, config.OLED_WIDTH)
                     disp.draw_spectrum(bar_mags, 0, audio.max_freq, "Wide Range")
                 
-                elif vis_mode == 2: # Analyzer (Restored)
+                elif vis_mode == 2: # Analyzer 
                     if analyzer_is_collecting:
                         process_analyzer_step(mags)
                         # Visual bar for progress
