@@ -91,11 +91,13 @@ def main_loop():
 # 4. Libraries & Modules
 * machine: For ADC, I2C, and Pin control.
 
-* ulab (or custom FFT implementation): For efficient numerical processing and Fourier Transforms.
+* time: To know the time used for measurements.
+
+* fft (custom): For efficient numerical processing and Fourier Transforms.
 
 * sh1106: Driver for the OLED display.
 
-* bluetooth: For communicating with the mobile app.
+* socket: For communicating with the mobile app.
 
 # 5. Phase 2
 
@@ -110,10 +112,10 @@ def main_loop():
 
 ### File Structure
 ```text
-├── main.py              # Entry point: orchestrates Audio, Display, and Network
+├── main.py              # Entry point: Planning Audio, Display, and Network
 ├── config.py            # Central configuration (Pins, WiFi, Audio Tuning)
 ├── audio_processor.py   # Handles ADC sampling and dB calculations
-├── fft.py               # Custom pure-Python FFT implementation
+├── fft.py               # Custom FFT implementation
 ├── display_manager.py   # Manages OLED drawing and I2C communication
 ├── network_manager.py   # Asynchronous Web Server & HTML content
 └── docs/                # Sphinx documentation source files
