@@ -4,10 +4,10 @@ import config
 
 class DisplayManager:
     """
-    Manages the OLED hardware abstraction.
+    Manages the OLED.
     
-    This class wraps the ``SH1106`` driver to provide high-level drawing functions specific
-    to the Spectrum Analyzer, such as drawing frequency bars, dB meters, and text reports.
+    This class uses the ``SH1106`` driver to provide a drawing functions specific
+    to the Spectrum Analyser, such as drawing frequency bars, dB meters, and text.
     
     Attributes:
         oled (SH1106_I2C): The driver instance for the screen.
@@ -16,7 +16,7 @@ class DisplayManager:
     def __init__(self):
         """
         Sets up the I2C connection on pins defined in ``config.py`` and initializes the display.
-        It displays a boot screen immediately upon instantiation.
+        It displays a boot screen.
         """
         i2c = machine.I2C(0, scl=machine.Pin(config.I2C_SCL_PIN), 
                           sda=machine.Pin(config.I2C_SDA_PIN), freq=400000)
@@ -44,7 +44,7 @@ class DisplayManager:
 
     def draw_spectrum(self, magnitudes, min_hz, max_hz, title):
         """
-        Renders the frequency spectrum bars on the OLED.
+        Display the frequency spectrum bars on the OLED.
 
         This method handles:
         1. Scaling bar height based on ``config.GAIN``.
@@ -84,7 +84,7 @@ class DisplayManager:
 
     def draw_analyzer_stats(self, max_hz, min_hz, avg_val):
         """
-        Renders the text report for the Analyzer Mode.
+        Shows the text report for the Analyzer Mode.
 
         :param float max_hz: The frequency with the highest energy detected.
         :param float min_hz: The frequency with the lowest energy detected (above noise).
@@ -99,7 +99,7 @@ class DisplayManager:
 
     def draw_db_meter(self, db_val, db_min, db_max):
         """
-        Renders a horizontal progress bar representing current Decibel levels.
+        Display a horizontal progress bar representing current Decibel levels.
 
         :param float db_val: Current real-time dB.
         :param float db_min: Lowest dB observed in this session.
