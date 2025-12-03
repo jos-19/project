@@ -35,7 +35,7 @@ The software will be written entirely in **MicroPython**. The architecture is di
 * **Real-time FFT:** Converts time-domain audio signals into frequency-domain data.
 * **Dual Display Mode:** Spectrum bars on the OLED and mirrored data via App.
 * **Statistical Analysis:** Tracks Min/Max dB values and identifies the most/least occupied frequency bands.
-* **Remote Control:** BLE/Wi-Fi commands to change settings.
+* **Remote Control:** Wi-Fi commands to change settings.
 
 ### Block Diagram
 
