@@ -154,7 +154,7 @@ def main_loop():
 ├── network_manager.py   # Asynchronous Web Server & HTML content
 └── docs/                # Sphinx documentation source files
 ``` 
-*Poster 
+* Poster 
 
 <img width="1587" height="2245" alt="Persuasive Research Poster in Orange Modern Simple Style" src="https://github.com/user-attachments/assets/704b8884-cd61-43f9-b276-d9f305c46cab" />
 
