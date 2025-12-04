@@ -112,6 +112,38 @@ def main_loop():
 ## Documentation
 **(https://jos-19.github.io/project/)**
 
+## Controls & Operation
+
+* The system is designed with a hierarchical control structure, prioritizing the onboard OLED display by default.
+
+* Physical Controls (ESP32 Button)
+
+* The device uses a single push-button for all interactions. The system distinguishes between Short and Long presses to manage different functions.
+
+* Short Press (< 0.8s): Cycles through Visualization Modes
+
+* Wide Range Analysis: Full spectrum monitoring from 100Hz to 10kHz.
+
+* Voice Mode: Zoomed-in frequency response focused on human speech (100Hz - 1kHz).
+
+* Analyzer Mode: Performs a 5-second static measurement to calculate the most/least occupied frequency bands.
+
+* dB Meter: Real-time noise intensity measurement with Min/Max hold.
+
+* Long Press (> 0.8s): Toggles Output Priority
+
+* OLED Priority (Default): Maximizes refresh rate for the physical screen. Wi-Fi data transmission is paused to save resources.
+
+* Web Priority: Activates the Wi-Fi web server. Data is streamed to the connected browser, and the OLED updates at a reduced rate.
+
+* Web Interface Control
+
+* When in Web Priority mode, the device hosts a live dashboard accessible via its IP address.
+
+* Bi-Directional Sync: The web dashboard mirrors the current mode of the ESP32.
+
+* Remote Control: Clicking the Next Mode button on the web interface sends a command back to the ESP32 to physically switch the audio processing mode. This keeps the hardware and the browser in perfect sync.
+
 ### File Structure
 ```text
 ├── main.py              # Entry point: Planning Audio, Display, and Network
