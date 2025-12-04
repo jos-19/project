@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>audio_processor &#8212; Audio_spectrum_analyzer 01.12.2025 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=27fed22d" />
+    <script src="../_static/documentation_options.js?v=f5440bc9"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for audio_processor</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span><span class="w"> </span><span class="nn">machine</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">math</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">fft</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">config</span>
+
+<div class="viewcode-block" id="AudioProcessor">
+<a class="viewcode-back" href="../modules.html#audio_processor.AudioProcessor">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">AudioProcessor</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    This class handles the interface with the ESP32 ADC (Analog-to-Digital Converter),</span>
+<span class="sd">    performs signal normalization, manages the Fast Fourier Transform (FFT) via the</span>
+<span class="sd">    helper module, and calculates derived metrics like Decibels (dB).</span>
+
+<span class="sd">    Attributes:</span>
+<span class="sd">        adc (machine.ADC): The configured ADC object on the microphone pin.</span>
+<span class="sd">        real_sampling_rate (int): The actual sampling rate calculated during initialization (approx 10-20kHz).</span>
+<span class="sd">        hz_per_bin (float): The frequency resolution of each FFT bin (Sampling Rate / Sample Length).</span>
+<span class="sd">        max_freq (float): The Nyquist frequency (Sampling Rate / 2).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Initializes the ADC, configures attenuation for 3.3V logic, and performs</span>
+<span class="sd">        a calibration step to determine the actual sampling rate.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># Initialize ADC</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">adc</span> <span class="o">=</span> <span class="n">machine</span><span class="o">.</span><span class="n">ADC</span><span class="p">(</span><span class="n">machine</span><span class="o">.</span><span class="n">Pin</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">MIC_PIN</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">adc</span><span class="o">.</span><span class="n">width</span><span class="p">(</span><span class="n">machine</span><span class="o">.</span><span class="n">ADC</span><span class="o">.</span><span class="n">WIDTH_12BIT</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">adc</span><span class="o">.</span><span class="n">atten</span><span class="p">(</span><span class="n">machine</span><span class="o">.</span><span class="n">ADC</span><span class="o">.</span><span class="n">ATTN_11DB</span><span class="p">)</span>
+        
+        <span class="c1"># Calibrate Sampling Rate</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">real_sampling_rate</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_measure_sampling_rate</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">hz_per_bin</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">real_sampling_rate</span> <span class="o">/</span> <span class="n">config</span><span class="o">.</span><span class="n">SAMPLE_LENGTH</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">max_freq</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">real_sampling_rate</span> <span class="o">/</span> <span class="mi">2</span>
+        
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Audio Init: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">real_sampling_rate</span><span class="si">}</span><span class="s2">Hz | Res: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">hz_per_bin</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2">Hz&quot;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="AudioProcessor.read_audio">
+<a class="viewcode-back" href="../modules.html#audio_processor.AudioProcessor.read_audio">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">read_audio</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Reads a full buffer of raw audio samples from the microphone.</span>
+
+<span class="sd">        This method blocks execution until `config.SAMPLE_LENGTH` samples are collected.</span>
+<span class="sd">        </span>
+<span class="sd">        :return: A list of integers (0-4095) representing raw voltage levels.</span>
+<span class="sd">        :rtype: list[int]</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">read_func</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">adc</span><span class="o">.</span><span class="n">read</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">read_func</span><span class="p">()</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">SAMPLE_LENGTH</span><span class="p">)]</span></div>
+
+
+<div class="viewcode-block" id="AudioProcessor.get_magnitudes">
+<a class="viewcode-back" href="../modules.html#audio_processor.AudioProcessor.get_magnitudes">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_magnitudes</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">raw_data</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Converts time-domain raw audio data into frequency-domain magnitudes.</span>
+
+<span class="sd">        :param list[int] raw_data: The list of raw ADC values collected by `read_audio`.</span>
+<span class="sd">        :return: A list of floats representing the magnitude of specific frequency bins.</span>
+<span class="sd">        :rtype: list[float]</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">fft</span><span class="o">.</span><span class="n">get_magnitude</span><span class="p">(</span><span class="n">raw_data</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="AudioProcessor.calculate_db">
+<a class="viewcode-back" href="../modules.html#audio_processor.AudioProcessor.calculate_db">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">calculate_db</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">raw_data</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Calculates the Root Mean Square (RMS) amplitude and converts it to Decibels (dB).</span>
+
+<span class="sd">        :param list[int] raw_data: The raw audio samples.</span>
+<span class="sd">        :return: The calculated loudness in dB (clamped to 0.0 minimum).</span>
+<span class="sd">        :rtype: float</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">raw_data</span><span class="p">:</span> <span class="k">return</span> <span class="mi">0</span>
+        <span class="n">avg</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">raw_data</span><span class="p">)</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">raw_data</span><span class="p">)</span>
+        <span class="n">centered</span> <span class="o">=</span> <span class="p">[</span><span class="n">x</span> <span class="o">-</span> <span class="n">avg</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">raw_data</span><span class="p">]</span>
+        <span class="n">squared_sum</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">x</span><span class="o">*</span><span class="n">x</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">centered</span><span class="p">)</span>
+        <span class="n">mean_square</span> <span class="o">=</span> <span class="n">squared_sum</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">centered</span><span class="p">)</span>
+        <span class="n">rms</span> <span class="o">=</span> <span class="n">math</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">mean_square</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">rms</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">db</span> <span class="o">=</span> <span class="mi">20</span> <span class="o">*</span> <span class="n">math</span><span class="o">.</span><span class="n">log10</span><span class="p">(</span><span class="n">rms</span> <span class="o">/</span> <span class="mf">2000.0</span><span class="p">)</span> <span class="o">+</span> <span class="mi">100</span> 
+            <span class="k">return</span> <span class="nb">max</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">db</span><span class="p">)</span>
+        <span class="k">return</span> <span class="mf">0.0</span></div>
+
+
+<div class="viewcode-block" id="AudioProcessor.calculate_analyzer_stats">
+<a class="viewcode-back" href="../modules.html#audio_processor.AudioProcessor.calculate_analyzer_stats">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">calculate_analyzer_stats</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">accumulated_mags</span><span class="p">,</span> <span class="n">count</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Calculates statistical data for the &#39;Analyzer&#39; mode over a duration of time.</span>
+
+<span class="sd">        It averages the accumulated magnitudes, ignores low-frequency noise (DC offset),</span>
+<span class="sd">        and finds the frequency bin with the highest energy.</span>
+
+<span class="sd">        :param list[float] accumulated_mags: Sum of magnitudes per bin over N frames.</span>
+<span class="sd">        :param int count: The number of frames accumulated.</span>
+<span class="sd">        :return: A tuple containing (Max Frequency Hz, Min Frequency Hz, Average Magnitude).</span>
+<span class="sd">        :rtype: tuple(float, float, float)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">count</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span> <span class="k">return</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+        
+        <span class="c1"># Calculate Average per bin</span>
+        <span class="n">avgs</span> <span class="o">=</span> <span class="p">[</span><span class="n">x</span> <span class="o">/</span> <span class="n">count</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">accumulated_mags</span><span class="p">]</span>
+        
+        <span class="c1"># Slice to ignore DC/Low noise</span>
+        <span class="n">valid_data</span> <span class="o">=</span> <span class="n">avgs</span><span class="p">[</span><span class="n">config</span><span class="o">.</span><span class="n">IGNORE_LOW_BINS</span><span class="p">:]</span>
+        
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">valid_data</span><span class="p">:</span> <span class="k">return</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+        
+        <span class="c1"># Find Max</span>
+        <span class="n">max_val</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">valid_data</span><span class="p">)</span>
+        <span class="n">max_idx</span> <span class="o">=</span> <span class="n">valid_data</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">max_val</span><span class="p">)</span> <span class="o">+</span> <span class="n">config</span><span class="o">.</span><span class="n">IGNORE_LOW_BINS</span>
+        <span class="n">max_hz</span> <span class="o">=</span> <span class="n">max_idx</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">hz_per_bin</span>
+        
+        <span class="c1"># Find Min</span>
+        <span class="n">min_val</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">valid_data</span><span class="p">)</span>
+        <span class="n">min_idx</span> <span class="o">=</span> <span class="n">valid_data</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">min_val</span><span class="p">)</span> <span class="o">+</span> <span class="n">config</span><span class="o">.</span><span class="n">IGNORE_LOW_BINS</span>
+        <span class="n">min_hz</span> <span class="o">=</span> <span class="n">min_idx</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">hz_per_bin</span>
+        
+        <span class="c1"># Overall Average</span>
+        <span class="n">overall_avg</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">valid_data</span><span class="p">)</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">valid_data</span><span class="p">)</span>
+        
+        <span class="k">return</span> <span class="p">(</span><span class="n">max_hz</span><span class="p">,</span> <span class="n">min_hz</span><span class="p">,</span> <span class="n">overall_avg</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="AudioProcessor.calculate_display_bars">
+<a class="viewcode-back" href="../modules.html#audio_processor.AudioProcessor.calculate_display_bars">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">calculate_display_bars</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">magnitudes</span><span class="p">,</span> <span class="n">min_hz</span><span class="p">,</span> <span class="n">max_hz</span><span class="p">,</span> <span class="n">num_bars</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Bins FFT data into a lower number of bars for display.</span>
+
+<span class="sd">        This function maps a  frequency range  into a small number </span>
+<span class="sd">        of screen pixels. It groups FFT bins and takes </span>
+<span class="sd">        the maximum value within that group.</span>
+
+<span class="sd">        :param list[float] magnitudes: The full resolution FFT data.</span>
+<span class="sd">        :param float min_hz: The starting frequency of the view.</span>
+<span class="sd">        :param float max_hz: The ending frequency of the view.</span>
+<span class="sd">        :param int num_bars: The target number of bars to generate.</span>
+<span class="sd">        :return: A list of bar heights ready for drawing.</span>
+<span class="sd">        :rtype: list[float]</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">start_idx</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">min_hz</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">hz_per_bin</span><span class="p">)</span>
+        <span class="n">end_idx</span>  <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">max_hz</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">hz_per_bin</span><span class="p">)</span>
+        
+        <span class="k">if</span> <span class="n">start_idx</span> <span class="o">&lt;</span> <span class="n">config</span><span class="o">.</span><span class="n">IGNORE_LOW_BINS</span><span class="p">:</span> <span class="n">start_idx</span> <span class="o">=</span> <span class="n">config</span><span class="o">.</span><span class="n">IGNORE_LOW_BINS</span>
+        <span class="k">if</span> <span class="n">end_idx</span> <span class="o">&gt;=</span> <span class="nb">len</span><span class="p">(</span><span class="n">magnitudes</span><span class="p">):</span> <span class="n">end_idx</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">magnitudes</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">end_idx</span> <span class="o">&lt;=</span> <span class="n">start_idx</span><span class="p">:</span> <span class="k">return</span> <span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="n">num_bars</span>
+        
+        <span class="n">num_fft_bins_in_range</span> <span class="o">=</span> <span class="n">end_idx</span> <span class="o">-</span> <span class="n">start_idx</span>
+        <span class="n">bins_per_bar</span> <span class="o">=</span> <span class="n">num_fft_bins_in_range</span> <span class="o">/</span> <span class="n">num_bars</span> 
+        
+        <span class="n">display_bars</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_bars</span><span class="p">):</span>
+            <span class="n">bin_start</span> <span class="o">=</span> <span class="n">start_idx</span> <span class="o">+</span> <span class="nb">int</span><span class="p">(</span><span class="n">i</span> <span class="o">*</span> <span class="n">bins_per_bar</span><span class="p">)</span>
+            <span class="n">bin_end</span> <span class="o">=</span> <span class="n">start_idx</span> <span class="o">+</span> <span class="nb">int</span><span class="p">((</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">bins_per_bar</span><span class="p">)</span>
+            
+            <span class="k">if</span> <span class="n">bin_end</span> <span class="o">==</span> <span class="n">bin_start</span><span class="p">:</span> <span class="n">bin_end</span> <span class="o">=</span> <span class="n">bin_start</span> <span class="o">+</span> <span class="mi">1</span>
+            <span class="k">if</span> <span class="n">bin_end</span> <span class="o">&gt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">magnitudes</span><span class="p">):</span> <span class="n">bin_end</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">magnitudes</span><span class="p">)</span>
+
+            <span class="n">bar_magnitudes</span> <span class="o">=</span> <span class="n">magnitudes</span><span class="p">[</span><span class="n">bin_start</span><span class="p">:</span><span class="n">bin_end</span><span class="p">]</span>
+            
+            <span class="n">mag</span> <span class="o">=</span> <span class="mi">0</span>
+            <span class="k">if</span> <span class="n">bar_magnitudes</span><span class="p">:</span> <span class="n">mag</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">bar_magnitudes</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">mag</span> <span class="o">&lt;</span> <span class="n">config</span><span class="o">.</span><span class="n">NOISE_GATE</span><span class="p">:</span> <span class="n">mag</span> <span class="o">=</span> <span class="mi">0</span>
+            <span class="n">display_bars</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">mag</span><span class="p">)</span>
+            
+        <span class="k">return</span> <span class="n">display_bars</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_measure_sampling_rate</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Internal calibration method.</span>
+<span class="sd">        </span>
+<span class="sd">        Measures the time it takes to read one full buffer to calculate the </span>
+<span class="sd">        effective sampling rate in Hz. </span>
+<span class="sd">        </span>
+<span class="sd">        :return: The calculated sampling rate in Hz.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">read_audio</span><span class="p">()</span>
+        <span class="n">start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">ticks_us</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">read_audio</span><span class="p">()</span>
+        <span class="n">end</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">ticks_us</span><span class="p">()</span>
+        <span class="n">diff</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">ticks_diff</span><span class="p">(</span><span class="n">end</span><span class="p">,</span> <span class="n">start</span><span class="p">)</span>
+        <span class="k">return</span> <span class="nb">int</span><span class="p">(</span><span class="mi">1000000</span> <span class="o">/</span> <span class="p">(</span><span class="n">diff</span> <span class="o">/</span> <span class="n">config</span><span class="o">.</span><span class="n">SAMPLE_LENGTH</span><span class="p">))</span></div>
+
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../index.html">Audio_spectrum_analyzer</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../modules.html">Project Modules</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+  <li><a href="index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2025, Oskar.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 9.0.0</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

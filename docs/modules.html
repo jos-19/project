@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Project Modules &#8212; Audio_spectrum_analyzer 01.12.2025 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=27fed22d" />
+    <script src="_static/documentation_options.js?v=f5440bc9"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="prev" title="Audio Spectrum Analyzer Documentation" href="index.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="project-modules">
+<h1>Project Modules<a class="headerlink" href="#project-modules" title="Link to this heading">¶</a></h1>
+<section id="module-main">
+<span id="main-controller"></span><h2>Main Controller<a class="headerlink" href="#module-main" title="Link to this heading">¶</a></h2>
+<section id="main-controller-module">
+<h3>Main Controller Module<a class="headerlink" href="#main-controller-module" title="Link to this heading">¶</a></h3>
+<p>This code is used for the audio processing, display, and network communications
+in a infinite loop.</p>
+<section id="key-responsibilities">
+<h4>Key Responsibilities:<a class="headerlink" href="#key-responsibilities" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p><strong>State Control:</strong> Saves the state for visualization modes and data accumulation.</p></li>
+<li><p><strong>Input Control:</strong> Monitors the physical button for mode switching (short press) and output toggling (long press).</p></li>
+<li><p><strong>Loop Execution:</strong> Manages the timing between reading audio, calculating FFTs, and updating the UI.</p></li>
+</ul>
+</section>
+<section id="global-variables">
+<h4>Global Variables:<a class="headerlink" href="#global-variables" title="Link to this heading">¶</a></h4>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">vis_mode</span></code> (int): 0=Speech, 1=Wide, 2=Analyzer, 3=dB Meter.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">output_mode</span></code> (int): 0=OLED Priority (fast framerate), 1=Web Priority (network enabled).</p></li>
+</ul>
+</section>
+</section>
+<dl class="py function">
+<dt class="sig sig-object py" id="main.main">
+<span class="sig-prename descclassname"><span class="pre">main.</span></span><span class="sig-name descname"><span class="pre">main</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/main.html#main"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#main.main" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</section>
+<section id="module-audio_processor">
+<span id="audio-processing"></span><h2>Audio Processing<a class="headerlink" href="#module-audio_processor" title="Link to this heading">¶</a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="audio_processor.AudioProcessor">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">audio_processor.</span></span><span class="sig-name descname"><span class="pre">AudioProcessor</span></span><a class="reference internal" href="_modules/audio_processor.html#AudioProcessor"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#audio_processor.AudioProcessor" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>This class handles the interface with the ESP32 ADC (Analog-to-Digital Converter),
+performs signal normalization, manages the Fast Fourier Transform (FFT) via the
+helper module, and calculates derived metrics like Decibels (dB).</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="audio_processor.AudioProcessor.adc">
+<span class="sig-name descname"><span class="pre">adc</span></span><a class="headerlink" href="#audio_processor.AudioProcessor.adc" title="Link to this definition">¶</a></dt>
+<dd><p>The configured ADC object on the microphone pin.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>machine.ADC</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="audio_processor.AudioProcessor.real_sampling_rate">
+<span class="sig-name descname"><span class="pre">real_sampling_rate</span></span><a class="headerlink" href="#audio_processor.AudioProcessor.real_sampling_rate" title="Link to this definition">¶</a></dt>
+<dd><p>The actual sampling rate calculated during initialization (approx 10-20kHz).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>int</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="audio_processor.AudioProcessor.hz_per_bin">
+<span class="sig-name descname"><span class="pre">hz_per_bin</span></span><a class="headerlink" href="#audio_processor.AudioProcessor.hz_per_bin" title="Link to this definition">¶</a></dt>
+<dd><p>The frequency resolution of each FFT bin (Sampling Rate / Sample Length).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>float</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="audio_processor.AudioProcessor.max_freq">
+<span class="sig-name descname"><span class="pre">max_freq</span></span><a class="headerlink" href="#audio_processor.AudioProcessor.max_freq" title="Link to this definition">¶</a></dt>
+<dd><p>The Nyquist frequency (Sampling Rate / 2).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>float</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="audio_processor.AudioProcessor.calculate_analyzer_stats">
+<span class="sig-name descname"><span class="pre">calculate_analyzer_stats</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">accumulated_mags</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">count</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/audio_processor.html#AudioProcessor.calculate_analyzer_stats"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#audio_processor.AudioProcessor.calculate_analyzer_stats" title="Link to this definition">¶</a></dt>
+<dd><p>Calculates statistical data for the ‘Analyzer’ mode over a duration of time.</p>
+<p>It averages the accumulated magnitudes, ignores low-frequency noise (DC offset),
+and finds the frequency bin with the highest energy.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>accumulated_mags</strong> (<em>list</em><em>[</em><em>float</em><em>]</em>) – Sum of magnitudes per bin over N frames.</p></li>
+<li><p><strong>count</strong> (<em>int</em>) – The number of frames accumulated.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A tuple containing (Max Frequency Hz, Min Frequency Hz, Average Magnitude).</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>tuple(float, float, float)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="audio_processor.AudioProcessor.calculate_db">
+<span class="sig-name descname"><span class="pre">calculate_db</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">raw_data</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/audio_processor.html#AudioProcessor.calculate_db"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#audio_processor.AudioProcessor.calculate_db" title="Link to this definition">¶</a></dt>
+<dd><p>Calculates the Root Mean Square (RMS) amplitude and converts it to Decibels (dB).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>raw_data</strong> (<em>list</em><em>[</em><em>int</em><em>]</em>) – The raw audio samples.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The calculated loudness in dB (clamped to 0.0 minimum).</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>float</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="audio_processor.AudioProcessor.calculate_display_bars">
+<span class="sig-name descname"><span class="pre">calculate_display_bars</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">magnitudes</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">min_hz</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_hz</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_bars</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/audio_processor.html#AudioProcessor.calculate_display_bars"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#audio_processor.AudioProcessor.calculate_display_bars" title="Link to this definition">¶</a></dt>
+<dd><p>Bins FFT data into a lower number of bars for display.</p>
+<p>This function maps a  frequency range  into a small number
+of screen pixels. It groups FFT bins and takes
+the maximum value within that group.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>magnitudes</strong> (<em>list</em><em>[</em><em>float</em><em>]</em>) – The full resolution FFT data.</p></li>
+<li><p><strong>min_hz</strong> (<em>float</em>) – The starting frequency of the view.</p></li>
+<li><p><strong>max_hz</strong> (<em>float</em>) – The ending frequency of the view.</p></li>
+<li><p><strong>num_bars</strong> (<em>int</em>) – The target number of bars to generate.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A list of bar heights ready for drawing.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>list[float]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="audio_processor.AudioProcessor.get_magnitudes">
+<span class="sig-name descname"><span class="pre">get_magnitudes</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">raw_data</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/audio_processor.html#AudioProcessor.get_magnitudes"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#audio_processor.AudioProcessor.get_magnitudes" title="Link to this definition">¶</a></dt>
+<dd><p>Converts time-domain raw audio data into frequency-domain magnitudes.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>raw_data</strong> (<em>list</em><em>[</em><em>int</em><em>]</em>) – The list of raw ADC values collected by <cite>read_audio</cite>.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A list of floats representing the magnitude of specific frequency bins.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>list[float]</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="audio_processor.AudioProcessor.read_audio">
+<span class="sig-name descname"><span class="pre">read_audio</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/audio_processor.html#AudioProcessor.read_audio"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#audio_processor.AudioProcessor.read_audio" title="Link to this definition">¶</a></dt>
+<dd><p>Reads a full buffer of raw audio samples from the microphone.</p>
+<p>This method blocks execution until <cite>config.SAMPLE_LENGTH</cite> samples are collected.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>A list of integers (0-4095) representing raw voltage levels.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>list[int]</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-display_manager">
+<span id="display-manager"></span><h2>Display Manager<a class="headerlink" href="#module-display_manager" title="Link to this heading">¶</a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="display_manager.DisplayManager">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">display_manager.</span></span><span class="sig-name descname"><span class="pre">DisplayManager</span></span><a class="reference internal" href="_modules/display_manager.html#DisplayManager"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#display_manager.DisplayManager" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Manages the OLED.</p>
+<p>This class uses the <code class="docutils literal notranslate"><span class="pre">SH1106</span></code> driver to provide a drawing functions specific
+to the Spectrum Analyser, such as drawing frequency bars, dB meters, and text.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="display_manager.DisplayManager.oled">
+<span class="sig-name descname"><span class="pre">oled</span></span><a class="headerlink" href="#display_manager.DisplayManager.oled" title="Link to this definition">¶</a></dt>
+<dd><p>The driver instance for the screen.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>SH1106_I2C</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="display_manager.DisplayManager.draw_analyzer_stats">
+<span class="sig-name descname"><span class="pre">draw_analyzer_stats</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">max_hz</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">min_hz</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">avg_val</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/display_manager.html#DisplayManager.draw_analyzer_stats"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#display_manager.DisplayManager.draw_analyzer_stats" title="Link to this definition">¶</a></dt>
+<dd><p>Shows the text report for the Analyzer Mode.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>max_hz</strong> (<em>float</em>) – The frequency with the highest energy detected.</p></li>
+<li><p><strong>min_hz</strong> (<em>float</em>) – The frequency with the lowest energy detected (above noise).</p></li>
+<li><p><strong>avg_val</strong> (<em>float</em>) – The average magnitude of the signal.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="display_manager.DisplayManager.draw_db_meter">
+<span class="sig-name descname"><span class="pre">draw_db_meter</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">db_val</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">db_min</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">db_max</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/display_manager.html#DisplayManager.draw_db_meter"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#display_manager.DisplayManager.draw_db_meter" title="Link to this definition">¶</a></dt>
+<dd><p>Display a horizontal progress bar representing current Decibel levels.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>db_val</strong> (<em>float</em>) – Current real-time dB.</p></li>
+<li><p><strong>db_min</strong> (<em>float</em>) – Lowest dB observed in this session.</p></li>
+<li><p><strong>db_max</strong> (<em>float</em>) – Highest dB observed in this session.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="display_manager.DisplayManager.draw_spectrum">
+<span class="sig-name descname"><span class="pre">draw_spectrum</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">magnitudes</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">min_hz</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_hz</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">title</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/display_manager.html#DisplayManager.draw_spectrum"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#display_manager.DisplayManager.draw_spectrum" title="Link to this definition">¶</a></dt>
+<dd><p>Display the frequency spectrum bars on the OLED.</p>
+<p>This method handles:
+1. Scaling bar height based on <code class="docutils literal notranslate"><span class="pre">config.GAIN</span></code>.
+2. Clipping bars that exceed screen height.
+3. Drawing the X-axis line and frequency labels.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>magnitudes</strong> (<em>list</em><em>[</em><em>float</em><em>]</em>) – A list of bar heights (already binned).</p></li>
+<li><p><strong>min_hz</strong> (<em>int</em>) – Label for the left side of the axis.</p></li>
+<li><p><strong>max_hz</strong> (<em>int</em>) – Label for the right side of the axis.</p></li>
+<li><p><strong>title</strong> (<em>str</em>) – Top-left title text.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="display_manager.DisplayManager.show_message">
+<span class="sig-name descname"><span class="pre">show_message</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">line1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">line2</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">''</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/display_manager.html#DisplayManager.show_message"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#display_manager.DisplayManager.show_message" title="Link to this definition">¶</a></dt>
+<dd><p>Clears the screen and displays two lines of text.
+Useful for status updates like “WiFi Connected” or errors.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>line1</strong> (<em>str</em>) – The header text.</p></li>
+<li><p><strong>line2</strong> (<em>str</em>) – The sub-header text (optional).</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-network_manager">
+<span id="network-manager"></span><h2>Network Manager<a class="headerlink" href="#module-network_manager" title="Link to this heading">¶</a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="network_manager.NetworkManager">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">network_manager.</span></span><span class="sig-name descname"><span class="pre">NetworkManager</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">display_ref</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/network_manager.html#NetworkManager"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#network_manager.NetworkManager" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Handles Wi-Fi connectivity and the HTTP Server.</p>
+<p>This class manages the connection to the Access Point and serves a
+Single Page Application (SPA) to connected clients. It processes AJAX
+requests to update the web visualization in real-time.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="network_manager.NetworkManager.wlan">
+<span class="sig-name descname"><span class="pre">wlan</span></span><a class="headerlink" href="#network_manager.NetworkManager.wlan" title="Link to this definition">¶</a></dt>
+<dd><p>The WiFi interface object.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>network.WLAN</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="network_manager.NetworkManager.server_socket">
+<span class="sig-name descname"><span class="pre">server_socket</span></span><a class="headerlink" href="#network_manager.NetworkManager.server_socket" title="Link to this definition">¶</a></dt>
+<dd><p>The listening HTTP socket.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>socket</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="network_manager.NetworkManager.ip_address">
+<span class="sig-name descname"><span class="pre">ip_address</span></span><a class="headerlink" href="#network_manager.NetworkManager.ip_address" title="Link to this definition">¶</a></dt>
+<dd><p>The assigned IP address of the ESP32.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>str</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="network_manager.NetworkManager.display">
+<span class="sig-name descname"><span class="pre">display</span></span><a class="headerlink" href="#network_manager.NetworkManager.display" title="Link to this definition">¶</a></dt>
+<dd><p>Reference to the display to show connection status.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#display_manager.DisplayManager" title="display_manager.DisplayManager">DisplayManager</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="network_manager.NetworkManager.connect">
+<span class="sig-name descname"><span class="pre">connect</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/network_manager.html#NetworkManager.connect"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#network_manager.NetworkManager.connect" title="Link to this definition">¶</a></dt>
+<dd><p>Attempts to connect to the WiFi network defined in <code class="docutils literal notranslate"><span class="pre">config.py</span></code>.</p>
+<p>It will retry for approximately 10 seconds.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><code class="docutils literal notranslate"><span class="pre">True</span></code> if connected successfully, <code class="docutils literal notranslate"><span class="pre">False</span></code> otherwise.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>bool</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="network_manager.NetworkManager.handle_request">
+<span class="sig-name descname"><span class="pre">handle_request</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data_json_func</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cycle_mode_func</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/network_manager.html#NetworkManager.handle_request"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#network_manager.NetworkManager.handle_request" title="Link to this definition">¶</a></dt>
+<dd><p>Checks for incoming HTTP requests and routes them.</p>
+<p>This method is non-blocking. If no client is waiting, it returns immediately.</p>
+<p><strong>Routing Logic:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">/api/switch_mode</span></code> -&gt; triggers <code class="docutils literal notranslate"><span class="pre">cycle_mode_func</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">/api/data</span></code> -&gt; responds with JSON data from <code class="docutils literal notranslate"><span class="pre">data_json_func</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">/</span></code> -&gt; serves the static HTML page.</p></li>
+</ul>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data_json_func</strong> (<em>function</em>) – Callback function that returns the current system state as a JSON string.</p></li>
+<li><p><strong>cycle_mode_func</strong> (<em>function</em>) – Callback function to change the visualization mode.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-config">
+<span id="configuration"></span><h2>Configuration<a class="headerlink" href="#module-config" title="Link to this heading">¶</a></h2>
+<section id="config-py">
+<h3>config.py<a class="headerlink" href="#config-py" title="Link to this heading">¶</a></h3>
+<p>Central configuration for pins, network, and audio tuning.</p>
+</section>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">Audio_spectrum_analyzer</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Project Modules</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#module-main">Main Controller</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#module-audio_processor">Audio Processing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#module-display_manager">Display Manager</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#module-network_manager">Network Manager</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#module-config">Configuration</a></li>
+</ul>
+</li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="index.html" title="previous chapter">Audio Spectrum Analyzer Documentation</a></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2025, Oskar.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 9.0.0</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="_sources/modules.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
