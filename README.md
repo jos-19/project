@@ -120,7 +120,7 @@ def main_loop():
 
 * The device uses a single push-button for all interactions. The system distinguishes between Short and Long presses to manage different functions.
 
-* Short Press : Cycles through Visualization Modes
+## Short Press : Cycles through Visualization Modes
 
 * Wide Range Analysis: Full spectrum monitoring from 100Hz to 10kHz.
 
@@ -130,7 +130,7 @@ def main_loop():
 
 * dB Meter: Real-time noise intensity measurement with Min/Max hold.
 
-* Long Press (> 0.8s): Toggles Output Priority
+## Long Press : Toggles Output Priority
 
 * OLED Priority (Default): Maximizes refresh rate for the physical screen. Wi-Fi data transmission is paused to save resources.
 
