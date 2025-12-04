@@ -88,16 +88,18 @@ def main_loop():
         if button_pressed:
             change_visualization_mode()
 ```
-# 4. Libraries & Modules
+# 4. External Libraries & Modules
 * machine: For ADC, I2C, and Pin control.
 
 * time: To know the time used for measurements.
+
+* math: For math calculations.
 
 * fft (custom): For efficient numerical processing and Fourier Transforms.
 
 * sh1106: Driver for the OLED display.
 
-* usocket: For communicating with the mobile app.
+* network and usocket: For communicating with the mobile app.
 
 # 5. Phase 2
 
