@@ -120,7 +120,7 @@ def main_loop():
 
 * The device uses a single push-button for all interactions. The system distinguishes between Short and Long presses to manage different functions.
 
-* Short Press (< 0.8s): Cycles through Visualization Modes
+* Short Press : Cycles through Visualization Modes
 
 * Wide Range Analysis: Full spectrum monitoring from 100Hz to 10kHz.
 
